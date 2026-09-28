@@ -1,3 +1,11 @@
+// Keep marker anchors inside a smaller map rectangle, clear of map controls.
+export function safeFitPadding({ x, y }) {
+  return {
+    paddingTopLeft: [Math.min(72, Math.floor(x * 0.25)), Math.min(84, Math.floor(y * 0.35))],
+    paddingBottomRight: [Math.min(88, Math.floor(x * 0.35)), Math.min(56, Math.floor(y * 0.25))]
+  };
+}
+
 // Programmatic fits are synchronous so only user camera changes pause following.
 export function followLocations(map, getPoints, fitPoints, button) {
   let following = true, fitting = false, lastPoints = '';

@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { followLocations } from '../public/map-follow.js';
+import { followLocations, safeFitPadding } from '../public/map-follow.js';
+test('fit padding leaves room for markers and controls on desktop and compact maps', () => {
+  assert.deepEqual(safeFitPadding({ x: 900, y: 600 }), { paddingTopLeft: [72, 84], paddingBottomRight: [88, 56] });
+  assert.deepEqual(safeFitPadding({ x: 390, y: 140 }), { paddingTopLeft: [72, 49], paddingBottomRight: [88, 35] });
+});
 test('fits updated locations, preserves user pan/zoom, and resumes on recenter', () => {
   const listeners = new Map();
   const map = { on(events, fn) { for (const event of events.split(' ')) listeners.set(event, fn); } };

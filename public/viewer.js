@@ -1,4 +1,4 @@
-import { followLocations } from '/assets/map-follow.js';
+import { followLocations, safeFitPadding } from '/assets/map-follow.js';
 const $ = id => document.getElementById(id);
 const map = L.map('map', { zoomControl: false }).setView([39, -98], 4);
 L.control.zoom({ position: 'topright' }).addTo(map);
@@ -8,7 +8,7 @@ const arrow = heading => L.divIcon({ className: 'vehicle-marker', iconSize: [46,
 const destinationIcon = L.divIcon({ className: 'destination-marker', iconSize: [34, 44], iconAnchor: [17, 42], html: '<svg width="34" height="44" viewBox="0 0 34 44" aria-hidden="true"><path d="M17 42C14 36 3 26 3 17a14 14 0 1 1 28 0c0 9-11 19-14 25Z" fill="#22262b" stroke="white" stroke-width="2"/><circle cx="17" cy="17" r="5" fill="white"/></svg>' });
 const tracking = followLocations(map,
   () => [carMarker, destinationMarker].filter(Boolean).map(marker => { const p = marker.getLatLng(); return [p.lat, p.lng]; }),
-  points => map.fitBounds(L.latLngBounds(points), { padding: [60, 60], maxZoom: 15, animate: false }), $('fit'));
+  points => map.fitBounds(L.latLngBounds(points), { ...safeFitPadding(map.getSize()), maxZoom: 15, animate: false }), $('fit'));
 $('units').onchange = () => latest && render(latest);
 const number = n => n == null ? '—' : Math.round(n).toString();
 function render(data) {

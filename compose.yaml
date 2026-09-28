@@ -1,0 +1,14 @@
+services:
+  tesla-eta:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_PATH: /data/eta.sqlite
+      LOCAL_PREVIEW: 'false'
+    ports:
+      - '127.0.0.1:3000:3000'
+    volumes:
+      - eta-data:/data
+volumes:
+  eta-data:

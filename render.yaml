@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: tesla-eta
+    runtime: docker
+    plan: starter
+    healthCheckPath: /healthz
+    disk:
+      name: eta-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: DATABASE_PATH
+        value: /data/eta.sqlite
+      - key: LOCAL_PREVIEW
+        value: 'false'
+      - key: PUBLIC_ORIGIN
+        sync: false
+      - key: MQTT_URL
+        sync: false
+      - key: MQTT_USERNAME
+        sync: false
+      - key: MQTT_PASSWORD
+        sync: false
+      - key: CF_ACCESS_CLIENT_ID
+        sync: false
+      - key: CF_ACCESS_CLIENT_SECRET
+        sync: false
+      - key: CF_ACCESS_TEAM_DOMAIN
+        sync: false
+      - key: CF_ACCESS_ADMIN_AUD
+        sync: false

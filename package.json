@@ -1,0 +1,6 @@
+{
+  "name": "tesla-eta", "version": "1.0.0", "private": true, "type": "module",
+  "engines": { "node": ">=22.13.0" },
+  "scripts": { "start": "node --env-file-if-exists=.env server/index.js", "dev": "LOCAL_PREVIEW=true node --env-file-if-exists=.env server/index.js", "test": "node --test" },
+  "dependencies": { "express": "^5.1.0", "jose": "^6.1.0", "leaflet": "^1.9.4", "mqtt": "^5.14.0", "ws": "^8.18.3" }
+}

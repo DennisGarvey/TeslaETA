@@ -1,6 +1,13 @@
+import { followFleetLocations, safeFitPadding } from '/assets/map-follow.js';
 const $ = id => document.getElementById(id);
 let displayedShareId = null;
 const shareUrls = new Map();
+const fleetMarkers = new Map();
+const fleetMarkerStyles = new Map();
+let fleetMap, fleetTracking, latestCars = [];
+let carOptionsKey = '', fleetRowsKey = '';
+const fleetArrow = heading => L.divIcon({ className: 'vehicle-marker fleet-arrow', iconSize: [46, 46], iconAnchor: [23, 23], html: `<svg width="46" height="46" viewBox="0 0 46 46" style="transform:rotate(${Number(heading) || 0}deg)"><path d="M23 3L40 41L23 32L6 41Z" fill="#e82127" stroke="white" stroke-width="3" stroke-linejoin="round"/></svg>` });
+const fleetNumber = number => L.divIcon({ className: 'fleet-icon', iconSize: [30, 30], iconAnchor: [15, 15], html: `<span>${number}</span>` });
 const shareIcon = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3m0 0 4 4m-4-4L8 7M5 11v9h14v-9"/></svg>';
 $('share').innerHTML = shareIcon;
 function displayLink(id, url) {
@@ -12,6 +19,100 @@ function displayLink(id, url) {
 function showMqttConnection({ connected, configured }) {
   $('mqtt-alert').hidden = !!connected;
   $('mqtt-alert-text').textContent = configured ? 'MQTT is disconnected. Vehicle updates are unavailable.' : 'MQTT is not configured. Vehicle updates are unavailable.';
+  setConnectionStatus(connected ? 'Connected' : configured ? 'Disconnected' : 'Not configured');
+}
+function setConnectionStatus(status) {
+  const element = $('mqtt-status');
+  element.textContent = status;
+  element.className = `mqtt-status ${status === 'Connected' ? 'connected' : status === 'Connecting' ? 'connecting' : 'disconnected'}`;
+}
+function renderFleet(cars) {
+  latestCars = [...cars].sort((a, b) => Number(a.id) - Number(b.id));
+  $('fleet-count').textContent = `${cars.length} ${cars.length === 1 ? 'vehicle' : 'vehicles'}`;
+  const nextOptionsKey = JSON.stringify(latestCars.map(car => [car.id, car.name]));
+  if (nextOptionsKey !== carOptionsKey) {
+    const previous = $('car').value;
+    $('car').replaceChildren(...latestCars.map(car => new Option(car.name || `Tesla ${car.id}`, car.id)));
+    if (latestCars.some(car => String(car.id) === previous)) $('car').value = previous;
+    carOptionsKey = nextOptionsKey;
+  }
+  $('create').disabled = !latestCars.length;
+  const nextRowsKey = JSON.stringify(latestCars.map(car => [car.id, car.name, car.state, car.speed, car.speedFresh, !!car.location, car.locationFresh, car.locationLiveAt]));
+  if (nextRowsKey !== fleetRowsKey) {
+  const rows = latestCars.map((car, index) => {
+    const row = document.createElement('button'); row.type = 'button'; row.className = 'fleet-vehicle'; row.dataset.carId = car.id;
+    row.disabled = !car.location || !Number.isFinite(car.location.latitude) || !Number.isFinite(car.location.longitude);
+    row.setAttribute('aria-pressed', String(fleetTracking?.selected() === car.id));
+    row.onclick = () => fleetTracking?.select(car.id);
+    const number = document.createElement('span'); number.className = 'fleet-number'; number.textContent = String(index + 1);
+    const details = document.createElement('div');
+    const name = document.createElement('strong'); name.textContent = car.name || `Tesla ${car.id}`;
+    const state = document.createElement('span'); state.className = 'fleet-state';
+    const drivingSpeed = car.state?.toLowerCase() === 'driving' && car.speedFresh && car.speed != null ? ` · ${Math.round(car.speed * 0.621371)} mph` : '';
+    const stateLabel = car.state ? car.state[0].toUpperCase() + car.state.slice(1) : 'State unavailable';
+    state.textContent = `${stateLabel}${drivingSpeed}`;
+    const location = document.createElement('p'); location.className = 'muted';
+    location.textContent = !car.location ? 'Location unavailable' : car.locationFresh && car.locationLiveAt ? `Location received ${new Date(car.locationLiveAt).toLocaleTimeString()}` : 'Last known location';
+    details.append(name, state, location); row.append(number, details);
+    return row;
+  });
+  if (rows.length) $('fleet-list').replaceChildren(...rows);
+  else $('fleet-list').replaceChildren(Object.assign(document.createElement('p'), { className: 'muted fleet-empty', textContent: 'No vehicles received.' }));
+  fleetRowsKey = nextRowsKey;
+  }
+  if (fleetMap && !$('map-panel').hidden) updateFleetMarkers();
+}
+function setFleetMarkerIcon(marker, car, index, selectedId) {
+  const selected = car.id === selectedId;
+  const key = selected ? `arrow:${Number(car.heading) || 0}` : `number:${index + 1}`;
+  if (fleetMarkerStyles.get(car.id) !== key) {
+    marker.setIcon(selected ? fleetArrow(car.heading) : fleetNumber(index + 1));
+    fleetMarkerStyles.set(car.id, key);
+  }
+}
+function showFleetSelection(id) {
+  document.querySelectorAll('.fleet-vehicle').forEach(row => row.setAttribute('aria-pressed', String(row.dataset.carId === id)));
+  latestCars.forEach((car, index) => { const marker = fleetMarkers.get(car.id); if (marker) setFleetMarkerIcon(marker, car, index, id); });
+}
+function updateFleetMarkers() {
+  const present = new Set();
+  latestCars.forEach((car, index) => {
+    const point = car.location;
+    if (!point || !Number.isFinite(point.latitude) || !Number.isFinite(point.longitude)) return;
+    present.add(car.id);
+    const position = [point.latitude, point.longitude];
+    const icon = car.id === fleetTracking.selected() ? fleetArrow(car.heading) : fleetNumber(index + 1);
+    let marker = fleetMarkers.get(car.id);
+    if (!marker) {
+      marker = L.marker(position, { icon, title: car.name || `Tesla ${car.id}` }).addTo(fleetMap);
+      marker.on('click', () => fleetTracking.select(car.id));
+      fleetMarkers.set(car.id, marker);
+    } else {
+      const previous = marker.getLatLng();
+      if (previous.lat !== point.latitude || previous.lng !== point.longitude) marker.setLatLng(position);
+      setFleetMarkerIcon(marker, car, index, fleetTracking.selected());
+    }
+    if (!fleetMarkerStyles.has(car.id)) fleetMarkerStyles.set(car.id, car.id === fleetTracking.selected() ? `arrow:${Number(car.heading) || 0}` : `number:${index + 1}`);
+  });
+  for (const [id, marker] of fleetMarkers) if (!present.has(id)) { fleetMap.removeLayer(marker); fleetMarkers.delete(id); fleetMarkerStyles.delete(id); }
+  $('fleet-map-empty').hidden = present.size > 0;
+  fleetTracking.update();
+}
+function initFleetMap() {
+  if (fleetMap) { fleetMap.invalidateSize(); updateFleetMarkers(); return; }
+  fleetMap = L.map('fleet-map', { zoomControl: false }).setView([39, -98], 4);
+  L.control.zoom({ position: 'topright' }).addTo(fleetMap);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors', maxZoom: 19 }).addTo(fleetMap);
+  fleetTracking = followFleetLocations(fleetMap,
+    () => [...fleetMarkers.values()].map(marker => { const p = marker.getLatLng(); return [p.lat, p.lng]; }),
+    id => { const p = fleetMarkers.get(id)?.getLatLng(); return p && [p.lat, p.lng]; },
+    points => fleetMap.fitBounds(L.latLngBounds(points), { ...safeFitPadding(fleetMap.getSize()), maxZoom: points.length > 1 ? 19 : 15, animate: false }),
+    (point, force) => {
+      if (force || fleetMap.getZoom() !== 15) fleetMap.setView(point, 15, { animate: false });
+      else fleetMap.panTo(point, { animate: false });
+    }, $('fleet-fit'), showFleetSelection);
+  updateFleetMarkers();
+  requestAnimationFrame(() => { fleetMap.invalidateSize(); fleetTracking.update(true); });
 }
 async function shareLink(url, id) {
   if (!url) return;
@@ -32,10 +133,11 @@ async function refresh() {
   try {
     const [status, shares] = await Promise.all([api('status'), api('shares')]);
     showMqttConnection(status);
+    renderFleet(status.cars);
     if (displayedShareId && !shares.some(share => share.id === displayedShareId && share.expires_at > Date.now())) {
       displayedShareId = null; $('created').hidden = true; $('url').value = ''; $('open').removeAttribute('href'); $('message').textContent = '';
     }
-    if (!$('connection-panel').hidden) { const settings = await api('connection'); $('connection-message').textContent = settings.status || ''; }
+    if (!$('connection-panel').hidden) { const settings = await api('connection'); setConnectionStatus(settings.status || 'Not configured'); }
     const activeShares = shares.filter(share => share.recoverable && share.expires_at > Date.now());
     const activeIds = new Set(activeShares.map(share => share.id));
     for (const id of shareUrls.keys()) if (!activeIds.has(id)) shareUrls.delete(id);
@@ -45,10 +147,6 @@ async function refresh() {
       catch { /* A link can expire or be revoked between list and recovery. */ }
     }));
     const vehicleNames = new Map(status.cars.map(car => [car.id, car.name]));
-    const previous = $('car').value;
-    $('car').replaceChildren(...status.cars.map(car => new Option(car.name || `Tesla ${car.id}`, car.id)));
-    if (status.cars.some(car => car.id === previous)) $('car').value = previous;
-    $('create').disabled = !status.cars.length;
     $('shares').replaceChildren();
     if (!shares.length) $('shares').textContent = 'No sharing links yet.';
     for (const share of shares) {
@@ -113,6 +211,7 @@ viewerEvents.addEventListener('viewers', event => {
   document.querySelectorAll('.viewer-count').forEach(element => setViewerCount(element, element.dataset.shareId));
 });
 viewerEvents.addEventListener('connection', event => showMqttConnection(JSON.parse(event.data)));
+viewerEvents.addEventListener('vehicles', event => renderFleet(JSON.parse(event.data)));
 viewerEvents.onerror = () => {
   countsConnected = false;
   document.querySelectorAll('.viewer-count').forEach(element => setViewerCount(element, element.dataset.shareId));
@@ -132,19 +231,23 @@ function showConnection(settings) {
   $('transport').value = settings.transport || 'websocket'; $('mqtt-url').value = settings.url || '';
   $('mqtt-user').value = settings.username || ''; $('cloudflare-enabled').checked = !!settings.cloudflare;
   for (const id of ['mqtt-password', 'cf-client-id', 'cf-client-secret']) $(id).value = '';
-  $('mqtt-password').placeholder = settings.hasPassword ? 'Saved · leave blank to keep' : 'Optional broker password';
-  $('cf-client-id').placeholder = settings.hasClientId ? 'Saved · leave blank to keep' : 'Client ID or CF-Access-Client-Id: value';
-  $('cf-client-secret').placeholder = settings.hasClientSecret ? 'Saved · leave blank to keep' : 'Secret or CF-Access-Client-Secret: value';
+  $('mqtt-password').placeholder = '';
+  $('cf-client-id').placeholder = '';
+  $('cf-client-secret').placeholder = '';
+  $('mqtt-password-hint').hidden = !settings.hasPassword;
+  $('cf-client-id-hint').hidden = !settings.hasClientId;
+  $('cf-client-secret-hint').hidden = !settings.hasClientSecret;
   $('clear-password').checked = false;
-  $('connection-message').textContent = settings.status || '';
+  setConnectionStatus(settings.status || 'Not configured');
+  $('connection-message').textContent = '';
   connectionFields();
 }
-async function selectPanel(connection) {
-  const active = connection === true ? 'connection' : connection === 'settings' ? 'settings' : 'sharing';
-  for (const name of ['sharing', 'connection', 'settings']) {
+async function selectPanel(active) {
+  for (const name of ['sharing', 'map', 'connection', 'settings']) {
     $(name + '-panel').hidden = name !== active;
     $(name + '-tab').setAttribute('aria-pressed', String(name === active));
   }
+  if (active === 'map') initFleetMap();
   if (active === 'connection') { try { showConnection(await api('connection')); } catch (error) { $('connection-message').textContent = error.message; } }
   if (active === 'settings') { try { const settings = await api('sharing-settings'); $('public-origin').value = settings.publicOrigin; } catch (error) { $('sharing-settings-message').textContent = error.message; } }
 }
@@ -161,9 +264,10 @@ $('sharing-settings-form').onsubmit = async event => {
   } catch (error) { $('sharing-settings-message').textContent = error.message; }
   finally { $('save-sharing-settings').disabled = false; }
 };
-$('sharing-tab').onclick = () => selectPanel(false);
-$('connection-tab').onclick = () => selectPanel(true);
-$('mqtt-alert-settings').onclick = () => selectPanel(true);
+$('sharing-tab').onclick = () => selectPanel('sharing');
+$('map-tab').onclick = () => selectPanel('map');
+$('connection-tab').onclick = () => selectPanel('connection');
+$('mqtt-alert-settings').onclick = () => selectPanel('connection');
 function detectTransport() {
   const protocol = $('mqtt-url').value.trim().match(/^([a-z]+):\/\//i)?.[1].toLowerCase();
   if (['ws', 'wss', 'http', 'https'].includes(protocol)) $('transport').value = 'websocket';
@@ -181,7 +285,7 @@ $('connection-form').onsubmit = async event => {
       password: $('mqtt-password').value, clearPassword: $('clear-password').checked,
       cloudflare: $('cloudflare-enabled').checked, clientId: $('cf-client-id').value, clientSecret: $('cf-client-secret').value
     }) });
-    showConnection(settings); $('connection-message').textContent = 'Settings saved. Connecting…'; await refresh();
+    showConnection(settings); setConnectionStatus('Connecting'); await refresh();
   } catch (error) { $('connection-message').textContent = error.message; }
   finally { $('save-connection').disabled = false; }
 };

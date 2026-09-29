@@ -69,6 +69,51 @@ a.share-title:hover{text-decoration-color:currentColor}
 .viewer-page #units{width:68px;height:42px;padding:0 25px 0 8px;background-position:right 4px center;border-color:transparent;color:#526366;font-size:16px;font-weight:500}
 .viewer-page #units:hover{background-color:#f4f6f6}
 
+.connection-panel{max-width:none}
+.connection-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.connection-heading h2{margin:0}
+.mqtt-status{display:inline-flex;align-items:center;gap:7px;color:#9a302a;font-size:13px;font-weight:600}
+.mqtt-status:before{content:"";width:8px;height:8px;flex:none;border-radius:50%;background:currentColor}
+.mqtt-status.connected{color:#157247}
+.mqtt-status.connecting{color:#976a0d}
+.saved-hint{color:#647478;font-size:12px;font-weight:400;line-height:1.3}
+.connection-layout{display:grid;grid-template-columns:minmax(340px,400px) minmax(0,1fr);gap:24px;align-items:start}
+.connection-settings{min-width:0}
+.admin-page .connection-panel .connection-settings form{grid-template-columns:1fr 1fr}
+#connection-form>label:first-child,#connection-form>.mqtt-url-field,#cloudflare-option{grid-column:1/-1}
+.fleet-panel{min-width:0}
+.fleet-heading{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:12px}
+.fleet-heading h3{font-size:16px;font-weight:600;margin:0}
+.fleet-heading span{font-size:13px;color:#647478}
+.fleet-content{display:grid;grid-template-columns:minmax(160px,220px) minmax(0,1fr);gap:12px;min-height:390px}
+.fleet-list{max-height:390px;min-width:0;overflow:auto;border:1px solid #dde5e7;border-radius:4px;background:#fafbfb}
+.fleet-empty{margin:12px}
+.fleet-vehicle{display:grid;width:100%;grid-template-columns:26px minmax(0,1fr);gap:9px;padding:11px 10px;border:0;border-bottom:1px solid #dde5e7;border-radius:0;background:transparent;color:inherit;text-align:left;font-weight:400}
+.fleet-vehicle:hover:not(:disabled){filter:none;background:#f1f4f4}
+.fleet-vehicle[aria-pressed="true"]{background:#eef1f1}
+.fleet-vehicle:disabled{opacity:1;cursor:default}
+.fleet-vehicle:last-child{border-bottom:0}
+.fleet-vehicle strong{display:block;font-size:14px;overflow-wrap:anywhere}
+.fleet-vehicle .muted{margin:4px 0 0;font-size:12px;line-height:1.4}
+.fleet-state{display:block;margin-top:3px;color:#647478;font-size:12px}
+.fleet-number,.fleet-icon span{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:#e82127;border:2px solid white;color:white;font-size:12px;font-weight:700;box-shadow:0 2px 5px #0004}
+.fleet-icon{background:transparent;border:0}
+.fleet-icon span{width:30px;height:30px;font-size:13px}
+.fleet-map-wrap{position:relative;min-height:390px;overflow:hidden;border:1px solid #dde5e7;border-radius:4px;background:#dce5e5}
+#fleet-map{position:absolute;inset:0}
+.fleet-map-empty{position:absolute;z-index:450;top:50%;left:50%;transform:translate(-50%,-50%);margin:0;padding:8px 12px;background:#fffffff0;color:#526366;font-size:13px;white-space:nowrap;pointer-events:none}
+@media(max-width:900px){.connection-layout{grid-template-columns:1fr}}
+@media(max-width:620px){.fleet-content{grid-template-columns:1fr;min-height:0}.fleet-list{max-height:180px}.fleet-map-wrap{min-height:300px}}
+@media(max-width:540px){.admin-page .connection-panel .connection-settings form,.cloudflare-fields{grid-template-columns:1fr}}
+@media(min-width:901px){.admin-page .connection-panel form{gap:8px}.connection-panel label{gap:5px}.connection-panel input,.connection-panel select{padding:8px}}
+.admin-page .connection-panel{max-width:650px}
+.connection-layout{display:block}
+.admin-page #map-panel{display:flex;flex:1;flex-direction:column;min-height:0;overflow:hidden}
+.admin-page #map-panel .fleet-content{flex:1;min-height:0}
+.admin-page #map-panel .fleet-list{max-height:none}
+.admin-page #map-panel .fleet-map-wrap{min-height:0}
+@media(max-width:620px){.admin-page #map-panel{overflow:auto}.admin-page #map-panel .fleet-content{flex:none;grid-template-rows:auto minmax(300px,1fr)}.admin-page #map-panel .fleet-list{max-height:180px}.admin-page #map-panel .fleet-map-wrap{min-height:300px}}
+
 
 :root{color-scheme:light}
 .header-controls{display:flex;align-items:center;gap:8px}
@@ -124,3 +169,14 @@ a.share-title:hover{text-decoration-color:currentColor}
 .theme-dark .mqtt-info-tip{border-color:#55555a;background:#29292c;color:#ededee}
 @media(min-width:360px) and (max-width:540px){.mqtt-url-title label{font-size:12px}.mqtt-url-field{gap:6px}}
 @media(max-width:540px){.mqtt-info-tip{left:auto;right:-8px}}
+.theme-dark .fleet-heading span,.theme-dark .fleet-state{color:#b5b5ba}
+.theme-dark .fleet-list,.theme-dark .fleet-map-wrap{background:#252528;border-color:#3a3a3e}
+.theme-dark .fleet-vehicle{border-color:#3a3a3e}
+.theme-dark .fleet-vehicle{background:transparent;color:#ededee}
+.theme-dark .fleet-vehicle:hover:not(:disabled){background:#303034}
+.theme-dark .fleet-vehicle[aria-pressed="true"]{background:#38383c}
+.theme-dark .fleet-map-empty{background:#1c1c1eea;color:#d0d0d3}
+.theme-dark .mqtt-status.connected{color:#62cc91}
+.theme-dark .mqtt-status.connecting{color:#e3bb5b}
+.theme-dark .mqtt-status.disconnected{color:#ef8a82}
+.theme-dark .saved-hint{color:#a7a7aa}

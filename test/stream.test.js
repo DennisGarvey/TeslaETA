@@ -59,6 +59,9 @@ test('live admin counts track joins, disconnects, per-link isolation and revocat
     const admin = await openStream(`${f.base}/admin/api/viewers/events`); streams.push(admin);
     assert.deepEqual((await admin.event()).data, {});
     assert.deepEqual(await admin.event(), { type: 'connection', data: { connected: true, configured: false } });
+    const vehicles = await admin.event();
+    assert.equal(vehicles.type, 'vehicles');
+    assert.deepEqual(vehicles.data.map(car => car.name), ['Shared car', 'Private car']);
     const a = await openStream(`${f.base}/s/${one.token}/events`); streams.push(a); await a.event();
     assert.equal((await admin.event()).data[one.id], 1);
     const b = await openStream(`${f.base}/s/${one.token}/events`); streams.push(b); await b.event();
@@ -72,6 +75,16 @@ test('live admin counts track joins, disconnects, per-link isolation and revocat
     f.store.revoke(one.id); await b.event();
     assert.deepEqual((await admin.event()).data, { [two.id]: 1 });
     await c.reader.cancel(); assert.deepEqual((await admin.event()).data, {});
+    f.telemetry.ingest('teslamate/cars/2/location', Buffer.from('{"latitude":40,"longitude":-74}'));
+    const moved = await admin.event();
+    assert.equal(moved.type, 'vehicles');
+    assert.deepEqual(moved.data.find(car => car.id === '2').location, { latitude: 40, longitude: -74 });
+    f.telemetry.ingest('teslamate/cars/2/state', Buffer.from('driving'));
+    f.telemetry.ingest('teslamate/cars/2/speed', Buffer.from('99'));
+    const driving = await admin.event();
+    assert.equal(driving.type, 'vehicles');
+    assert.deepEqual(driving.data.find(car => car.id === '2').speed, 99);
+    assert.equal(driving.data.find(car => car.id === '2').speedFresh, true);
     f.telemetry.connected = false;
     assert.deepEqual(await admin.event(), { type: 'connection', data: { connected: false, configured: false } });
   } finally {

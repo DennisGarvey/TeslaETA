@@ -79,6 +79,12 @@ test('live admin counts track joins, disconnects, per-link isolation and revocat
     const moved = await admin.event();
     assert.equal(moved.type, 'vehicles');
     assert.deepEqual(moved.data.find(car => car.id === '2').location, { latitude: 40, longitude: -74 });
+    f.telemetry.ingest('teslamate/cars/2/state', Buffer.from('driving'));
+    f.telemetry.ingest('teslamate/cars/2/speed', Buffer.from('99'));
+    const driving = await admin.event();
+    assert.equal(driving.type, 'vehicles');
+    assert.deepEqual(driving.data.find(car => car.id === '2').speed, 99);
+    assert.equal(driving.data.find(car => car.id === '2').speedFresh, true);
     f.telemetry.connected = false;
     assert.deepEqual(await admin.event(), { type: 'connection', data: { connected: false, configured: false } });
   } finally {

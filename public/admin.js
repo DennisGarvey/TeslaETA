@@ -37,7 +37,7 @@ function renderFleet(cars) {
     carOptionsKey = nextOptionsKey;
   }
   $('create').disabled = !latestCars.length;
-  const nextRowsKey = JSON.stringify(latestCars.map(car => [car.id, car.name, car.state, !!car.location, car.locationFresh, car.locationLiveAt]));
+  const nextRowsKey = JSON.stringify(latestCars.map(car => [car.id, car.name, car.state, car.speed, car.speedFresh, !!car.location, car.locationFresh, car.locationLiveAt]));
   if (nextRowsKey !== fleetRowsKey) {
   const rows = latestCars.map((car, index) => {
     const row = document.createElement('button'); row.type = 'button'; row.className = 'fleet-vehicle'; row.dataset.carId = car.id;
@@ -47,7 +47,10 @@ function renderFleet(cars) {
     const number = document.createElement('span'); number.className = 'fleet-number'; number.textContent = String(index + 1);
     const details = document.createElement('div');
     const name = document.createElement('strong'); name.textContent = car.name || `Tesla ${car.id}`;
-    const state = document.createElement('span'); state.className = 'fleet-state'; state.textContent = car.state || 'State unavailable';
+    const state = document.createElement('span'); state.className = 'fleet-state';
+    const drivingSpeed = car.state?.toLowerCase() === 'driving' && car.speedFresh && car.speed != null ? ` · ${Math.round(car.speed * 0.621371)} mph` : '';
+    const stateLabel = car.state ? car.state[0].toUpperCase() + car.state.slice(1) : 'State unavailable';
+    state.textContent = `${stateLabel}${drivingSpeed}`;
     const location = document.createElement('p'); location.className = 'muted';
     location.textContent = !car.location ? 'Location unavailable' : car.locationFresh && car.locationLiveAt ? `Location received ${new Date(car.locationLiveAt).toLocaleTimeString()}` : 'Last known location';
     details.append(name, state, location); row.append(number, details);

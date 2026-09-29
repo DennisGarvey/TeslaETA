@@ -95,7 +95,7 @@ a.share-title:hover{text-decoration-color:currentColor}
 .fleet-vehicle:last-child{border-bottom:0}
 .fleet-vehicle strong{display:block;font-size:14px;overflow-wrap:anywhere}
 .fleet-vehicle .muted{margin:4px 0 0;font-size:12px;line-height:1.4}
-.fleet-state{display:block;margin-top:3px;color:#647478;font-size:12px;text-transform:capitalize}
+.fleet-state{display:block;margin-top:3px;color:#647478;font-size:12px}
 .fleet-number,.fleet-icon span{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:#e82127;border:2px solid white;color:white;font-size:12px;font-weight:700;box-shadow:0 2px 5px #0004}
 .fleet-icon{background:transparent;border:0}
 .fleet-icon span{width:30px;height:30px;font-size:13px}

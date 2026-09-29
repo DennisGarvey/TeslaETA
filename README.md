@@ -1,4 +1,4 @@
-# Tesla ETA
+# [Tesla ETA](https://dennisgarvey.github.io/TeslaETA/)
 
 Share a TeslaMate vehicle's location and navigation ETA through time-limited links. The app subscribes to TeslaMate's MQTT topics, serves the admin dashboard and viewer pages, and stores sharing links in SQLite.
 

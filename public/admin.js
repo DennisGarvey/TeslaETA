@@ -60,7 +60,7 @@ function renderFleet(cars) {
   else $('fleet-list').replaceChildren(Object.assign(document.createElement('p'), { className: 'muted fleet-empty', textContent: 'No vehicles received.' }));
   fleetRowsKey = nextRowsKey;
   }
-  if (fleetMap) updateFleetMarkers();
+  if (fleetMap && !$('map-panel').hidden) updateFleetMarkers();
 }
 function setFleetMarkerIcon(marker, car, index, selectedId) {
   const selected = car.id === selectedId;
@@ -99,7 +99,7 @@ function updateFleetMarkers() {
   fleetTracking.update();
 }
 function initFleetMap() {
-  if (fleetMap) { fleetMap.invalidateSize(); fleetTracking.update(true); return; }
+  if (fleetMap) { fleetMap.invalidateSize(); updateFleetMarkers(); return; }
   fleetMap = L.map('fleet-map', { zoomControl: false }).setView([39, -98], 4);
   L.control.zoom({ position: 'topright' }).addTo(fleetMap);
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors', maxZoom: 19 }).addTo(fleetMap);
@@ -241,13 +241,13 @@ function showConnection(settings) {
   $('connection-message').textContent = '';
   connectionFields();
 }
-async function selectPanel(connection) {
-  const active = connection === true ? 'connection' : connection === 'settings' ? 'settings' : 'sharing';
-  for (const name of ['sharing', 'connection', 'settings']) {
+async function selectPanel(active) {
+  for (const name of ['sharing', 'map', 'connection', 'settings']) {
     $(name + '-panel').hidden = name !== active;
     $(name + '-tab').setAttribute('aria-pressed', String(name === active));
   }
-  if (active === 'connection') { initFleetMap(); try { showConnection(await api('connection')); } catch (error) { $('connection-message').textContent = error.message; } }
+  if (active === 'map') initFleetMap();
+  if (active === 'connection') { try { showConnection(await api('connection')); } catch (error) { $('connection-message').textContent = error.message; } }
   if (active === 'settings') { try { const settings = await api('sharing-settings'); $('public-origin').value = settings.publicOrigin; } catch (error) { $('sharing-settings-message').textContent = error.message; } }
 }
 $('settings-tab').onclick = () => selectPanel('settings');
@@ -263,9 +263,10 @@ $('sharing-settings-form').onsubmit = async event => {
   } catch (error) { $('sharing-settings-message').textContent = error.message; }
   finally { $('save-sharing-settings').disabled = false; }
 };
-$('sharing-tab').onclick = () => selectPanel(false);
-$('connection-tab').onclick = () => selectPanel(true);
-$('mqtt-alert-settings').onclick = () => selectPanel(true);
+$('sharing-tab').onclick = () => selectPanel('sharing');
+$('map-tab').onclick = () => selectPanel('map');
+$('connection-tab').onclick = () => selectPanel('connection');
+$('mqtt-alert-settings').onclick = () => selectPanel('connection');
 function detectTransport() {
   const protocol = $('mqtt-url').value.trim().match(/^([a-z]+):\/\//i)?.[1].toLowerCase();
   if (['ws', 'wss', 'http', 'https'].includes(protocol)) $('transport').value = 'websocket';

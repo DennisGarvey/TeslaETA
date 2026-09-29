@@ -102,10 +102,17 @@ a.share-title:hover{text-decoration-color:currentColor}
 .fleet-map-wrap{position:relative;min-height:390px;overflow:hidden;border:1px solid #dde5e7;border-radius:4px;background:#dce5e5}
 #fleet-map{position:absolute;inset:0}
 .fleet-map-empty{position:absolute;z-index:450;top:50%;left:50%;transform:translate(-50%,-50%);margin:0;padding:8px 12px;background:#fffffff0;color:#526366;font-size:13px;white-space:nowrap;pointer-events:none}
-@media(max-width:900px){.connection-layout{grid-template-columns:1fr}.fleet-panel{order:-1}}
+@media(max-width:900px){.connection-layout{grid-template-columns:1fr}}
 @media(max-width:620px){.fleet-content{grid-template-columns:1fr;min-height:0}.fleet-list{max-height:180px}.fleet-map-wrap{min-height:300px}}
 @media(max-width:540px){.admin-page .connection-panel .connection-settings form,.cloudflare-fields{grid-template-columns:1fr}}
 @media(min-width:901px){.admin-page .connection-panel form{gap:8px}.connection-panel label{gap:5px}.connection-panel input,.connection-panel select{padding:8px}}
+.admin-page .connection-panel{max-width:650px}
+.connection-layout{display:block}
+.admin-page #map-panel{display:flex;flex:1;flex-direction:column;min-height:0;overflow:hidden}
+.admin-page #map-panel .fleet-content{flex:1;min-height:0}
+.admin-page #map-panel .fleet-list{max-height:none}
+.admin-page #map-panel .fleet-map-wrap{min-height:0}
+@media(max-width:620px){.admin-page #map-panel{overflow:auto}.admin-page #map-panel .fleet-content{flex:none;grid-template-rows:auto minmax(300px,1fr)}.admin-page #map-panel .fleet-list{max-height:180px}.admin-page #map-panel .fleet-map-wrap{min-height:300px}}
 
 
 :root{color-scheme:light}

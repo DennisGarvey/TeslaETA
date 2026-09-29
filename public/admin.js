@@ -1,10 +1,13 @@
-import { followLocations, safeFitPadding } from '/assets/map-follow.js';
+import { followFleetLocations, safeFitPadding } from '/assets/map-follow.js';
 const $ = id => document.getElementById(id);
 let displayedShareId = null;
 const shareUrls = new Map();
 const fleetMarkers = new Map();
+const fleetMarkerStyles = new Map();
 let fleetMap, fleetTracking, latestCars = [];
-let carOptionsKey = '';
+let carOptionsKey = '', fleetRowsKey = '';
+const fleetArrow = heading => L.divIcon({ className: 'vehicle-marker fleet-arrow', iconSize: [46, 46], iconAnchor: [23, 23], html: `<svg width="46" height="46" viewBox="0 0 46 46" style="transform:rotate(${Number(heading) || 0}deg)"><path d="M23 3L40 41L23 32L6 41Z" fill="#e82127" stroke="white" stroke-width="3" stroke-linejoin="round"/></svg>` });
+const fleetNumber = number => L.divIcon({ className: 'fleet-icon', iconSize: [30, 30], iconAnchor: [15, 15], html: `<span>${number}</span>` });
 const shareIcon = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3m0 0 4 4m-4-4L8 7M5 11v9h14v-9"/></svg>';
 $('share').innerHTML = shareIcon;
 function displayLink(id, url) {
@@ -34,8 +37,13 @@ function renderFleet(cars) {
     carOptionsKey = nextOptionsKey;
   }
   $('create').disabled = !latestCars.length;
+  const nextRowsKey = JSON.stringify(latestCars.map(car => [car.id, car.name, car.state, !!car.location, car.locationFresh, car.locationLiveAt]));
+  if (nextRowsKey !== fleetRowsKey) {
   const rows = latestCars.map((car, index) => {
-    const row = document.createElement('div'); row.className = 'fleet-vehicle';
+    const row = document.createElement('button'); row.type = 'button'; row.className = 'fleet-vehicle'; row.dataset.carId = car.id;
+    row.disabled = !car.location || !Number.isFinite(car.location.latitude) || !Number.isFinite(car.location.longitude);
+    row.setAttribute('aria-pressed', String(fleetTracking?.selected() === car.id));
+    row.onclick = () => fleetTracking?.select(car.id);
     const number = document.createElement('span'); number.className = 'fleet-number'; number.textContent = String(index + 1);
     const details = document.createElement('div');
     const name = document.createElement('strong'); name.textContent = car.name || `Tesla ${car.id}`;
@@ -47,7 +55,21 @@ function renderFleet(cars) {
   });
   if (rows.length) $('fleet-list').replaceChildren(...rows);
   else $('fleet-list').replaceChildren(Object.assign(document.createElement('p'), { className: 'muted fleet-empty', textContent: 'No vehicles received.' }));
+  fleetRowsKey = nextRowsKey;
+  }
   if (fleetMap) updateFleetMarkers();
+}
+function setFleetMarkerIcon(marker, car, index, selectedId) {
+  const selected = car.id === selectedId;
+  const key = selected ? `arrow:${Number(car.heading) || 0}` : `number:${index + 1}`;
+  if (fleetMarkerStyles.get(car.id) !== key) {
+    marker.setIcon(selected ? fleetArrow(car.heading) : fleetNumber(index + 1));
+    fleetMarkerStyles.set(car.id, key);
+  }
+}
+function showFleetSelection(id) {
+  document.querySelectorAll('.fleet-vehicle').forEach(row => row.setAttribute('aria-pressed', String(row.dataset.carId === id)));
+  latestCars.forEach((car, index) => { const marker = fleetMarkers.get(car.id); if (marker) setFleetMarkerIcon(marker, car, index, id); });
 }
 function updateFleetMarkers() {
   const present = new Set();
@@ -56,14 +78,20 @@ function updateFleetMarkers() {
     if (!point || !Number.isFinite(point.latitude) || !Number.isFinite(point.longitude)) return;
     present.add(car.id);
     const position = [point.latitude, point.longitude];
-    const icon = L.divIcon({ className: 'fleet-icon', iconSize: [30, 30], iconAnchor: [15, 15], html: `<span>${index + 1}</span>` });
+    const icon = car.id === fleetTracking.selected() ? fleetArrow(car.heading) : fleetNumber(index + 1);
     let marker = fleetMarkers.get(car.id);
     if (!marker) {
       marker = L.marker(position, { icon, title: car.name || `Tesla ${car.id}` }).addTo(fleetMap);
+      marker.on('click', () => fleetTracking.select(car.id));
       fleetMarkers.set(car.id, marker);
-    } else marker.setLatLng(position).setIcon(icon);
+    } else {
+      const previous = marker.getLatLng();
+      if (previous.lat !== point.latitude || previous.lng !== point.longitude) marker.setLatLng(position);
+      setFleetMarkerIcon(marker, car, index, fleetTracking.selected());
+    }
+    if (!fleetMarkerStyles.has(car.id)) fleetMarkerStyles.set(car.id, car.id === fleetTracking.selected() ? `arrow:${Number(car.heading) || 0}` : `number:${index + 1}`);
   });
-  for (const [id, marker] of fleetMarkers) if (!present.has(id)) { fleetMap.removeLayer(marker); fleetMarkers.delete(id); }
+  for (const [id, marker] of fleetMarkers) if (!present.has(id)) { fleetMap.removeLayer(marker); fleetMarkers.delete(id); fleetMarkerStyles.delete(id); }
   $('fleet-map-empty').hidden = present.size > 0;
   fleetTracking.update();
 }
@@ -72,9 +100,14 @@ function initFleetMap() {
   fleetMap = L.map('fleet-map', { zoomControl: false }).setView([39, -98], 4);
   L.control.zoom({ position: 'topright' }).addTo(fleetMap);
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors', maxZoom: 19 }).addTo(fleetMap);
-  fleetTracking = followLocations(fleetMap,
+  fleetTracking = followFleetLocations(fleetMap,
     () => [...fleetMarkers.values()].map(marker => { const p = marker.getLatLng(); return [p.lat, p.lng]; }),
-    points => fleetMap.fitBounds(L.latLngBounds(points), { ...safeFitPadding(fleetMap.getSize()), maxZoom: points.length > 1 ? 19 : 15, animate: false }), $('fleet-fit'));
+    id => { const p = fleetMarkers.get(id)?.getLatLng(); return p && [p.lat, p.lng]; },
+    points => fleetMap.fitBounds(L.latLngBounds(points), { ...safeFitPadding(fleetMap.getSize()), maxZoom: points.length > 1 ? 19 : 15, animate: false }),
+    (point, force) => {
+      if (force || fleetMap.getZoom() !== 15) fleetMap.setView(point, 15, { animate: false });
+      else fleetMap.panTo(point, { animate: false });
+    }, $('fleet-fit'), showFleetSelection);
   updateFleetMarkers();
   requestAnimationFrame(() => { fleetMap.invalidateSize(); fleetTracking.update(true); });
 }

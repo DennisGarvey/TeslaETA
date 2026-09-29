@@ -29,3 +29,42 @@ export function followLocations(map, getPoints, fitPoints, button) {
   indicate();
   return { update };
 }
+
+// The admin fleet map can follow one car or keep the whole fleet in view.
+export function followFleetLocations(map, getPoints, getSelectedPoint, fitAll, centerSelected, button, onSelectionChange) {
+  let selectedId = null, following = true, fitting = false, lastTarget = '';
+  function indicate() {
+    button.hidden = selectedId == null && following;
+    button.textContent = selectedId == null ? 'Recenter' : 'Show all vehicles';
+    button.title = selectedId == null ? 'Fit all vehicle locations and resume automatic tracking' : 'Fit all vehicle locations';
+  }
+  function pause() { if (!fitting) { following = false; indicate(); } }
+  function update(force = false) {
+    if (!following) return;
+    let selectedPoint = selectedId == null ? null : getSelectedPoint(selectedId);
+    if (selectedId != null && !selectedPoint) {
+      selectedId = null; onSelectionChange(null); indicate(); force = true;
+    }
+    const points = selectedId == null ? getPoints() : [selectedPoint];
+    const target = JSON.stringify([selectedId, points]);
+    if (!points.length || (!force && target === lastTarget)) return;
+    fitting = true;
+    try {
+      if (selectedId == null) fitAll(points);
+      else centerSelected(selectedPoint, force);
+      lastTarget = target;
+    } finally { fitting = false; }
+  }
+  function select(id) {
+    if (!getSelectedPoint(id)) return;
+    selectedId = id; following = true; onSelectionChange(id); indicate(); update(true);
+  }
+  function showAll() {
+    selectedId = null; following = true; onSelectionChange(null); indicate(); update(true);
+  }
+  map.on('dragstart movestart zoomstart', pause);
+  map.on('resize', () => update(true));
+  button.onclick = showAll;
+  indicate();
+  return { update, select, showAll, selected: () => selectedId };
+}

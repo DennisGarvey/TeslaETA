@@ -57,15 +57,16 @@ async function refresh() {
       const title = document.createElement(url ? 'a' : 'strong'), meta = document.createElement('p');
       title.className = 'share-title'; title.textContent = share.label || 'Vehicle link'; meta.className = 'muted';
       if (url) { title.href = url; title.target = '_blank'; title.rel = 'noopener noreferrer'; title.title = 'Open sharing link in a new tab'; }
-      meta.textContent = `${Date.now() >= share.expires_at ? 'Expired' : 'Ends'} ${new Date(share.expires_at).toLocaleString()} · ${vehicleNames.get(share.car_id) || 'Vehicle name unavailable'}`;
+      const expired = Date.now() >= share.expires_at;
+      meta.textContent = `${expired ? 'Expired' : 'Ends'} ${new Date(share.expires_at).toLocaleString()} · ${vehicleNames.get(share.car_id) || 'Vehicle name unavailable'}`;
       const count = document.createElement('p'); count.className = 'viewer-count'; count.dataset.shareId = share.id;
       count.title = 'Connected viewing tabs; multiple tabs count separately';
       setViewerCount(count, share.id);
       detail.append(title, meta, count);
-      const revoke = document.createElement('button'); revoke.className = 'secondary'; revoke.textContent = 'Revoke';
+      const revoke = document.createElement('button'); revoke.className = 'secondary'; revoke.textContent = expired ? 'Remove' : 'Revoke';
       revoke.onclick = async () => { revoke.disabled = true; try { await api(`shares/${share.id}`, { method: 'DELETE' }); await refresh(); } catch (error) { $('message').textContent = error.message; revoke.disabled = false; } };
       const actions = document.createElement('div'); actions.className = 'share-actions';
-      if (share.recoverable && Date.now() < share.expires_at) {
+      if (share.recoverable && !expired) {
         const copy = document.createElement('button'); copy.className = 'secondary'; copy.textContent = 'Copy link';
         copy.onclick = async () => {
           copy.disabled = true;
@@ -84,7 +85,7 @@ async function refresh() {
           shareButton.onclick = () => shareLink(url, share.id);
           actions.append(shareButton);
         }
-      } else if (!share.recoverable && Date.now() < share.expires_at) {
+      } else if (!share.recoverable && !expired) {
         const hint = document.createElement('p'); hint.className = 'muted'; hint.textContent = 'Older link: create a new link if the original is lost.'; detail.append(hint);
       }
       actions.append(revoke);

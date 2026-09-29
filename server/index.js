@@ -12,6 +12,8 @@ if (!localPreview && (!config.accessIssuer || !config.accessAudience)) throw new
 if (config.accessIssuer && !/^https:\/\/[a-z0-9-]+\.cloudflareaccess\.com$/.test(config.accessIssuer)) throw new Error('Use your HTTPS cloudflareaccess.com team domain.');
 const telemetry = new Telemetry();
 const store = new Store(process.env.DATABASE_PATH || './data/eta.sqlite');
+const expiredLinkCleanup = setInterval(() => store.pruneExpired(), 60_000);
+expiredLinkCleanup.unref();
 const connection = new MqttConnection(telemetry);
 const persisted = store.loadConnection();
 if (persisted) connection.apply(normalizeSettings(persisted));
@@ -22,4 +24,4 @@ else if (process.env.MQTT_URL) connection.apply(normalizeSettings({
   clientId: process.env.CF_ACCESS_CLIENT_ID || '', clientSecret: process.env.CF_ACCESS_CLIENT_SECRET || ''
 }));
 const server = createApp({ telemetry, store, config, connection }).listen(port, localPreview ? '127.0.0.1' : '0.0.0.0', () => console.log(`Tesla ETA listening on port ${port}${localPreview ? ' (loopback-only live preview)' : ''}`));
-for (const signal of ['SIGINT','SIGTERM']) process.on(signal, () => { connection.close(); server.close(() => { store.db.close(); process.exit(0); }); server.closeAllConnections(); });
+for (const signal of ['SIGINT','SIGTERM']) process.on(signal, () => { clearInterval(expiredLinkCleanup); connection.close(); server.close(() => { store.db.close(); process.exit(0); }); server.closeAllConnections(); });

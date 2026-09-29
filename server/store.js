@@ -4,6 +4,7 @@ import { randomBytes, createHash, createCipheriv, createDecipheriv } from 'node:
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 export const hash = token => createHash('sha256').update(token).digest('hex');
+const expiredLinkRetentionMs = 24 * 60 * 60 * 1000;
 export class Store extends EventEmitter {
   constructor(path) {
     super(); this.setMaxListeners(0);
@@ -22,6 +23,7 @@ export class Store extends EventEmitter {
     this.db.exec('CREATE TABLE IF NOT EXISTS app_settings (name TEXT PRIMARY KEY, value TEXT NOT NULL)');
     this.db.exec('CREATE TABLE IF NOT EXISTS settings (name TEXT PRIMARY KEY, encrypted_value TEXT NOT NULL)');
     this.db.exec('CREATE TABLE IF NOT EXISTS link_sequence (id INTEGER PRIMARY KEY CHECK (id = 1), next_number INTEGER NOT NULL)');
+    this.pruneExpired();
     const labels = this.db.prepare('SELECT label FROM shares').all();
     const highest = labels.reduce((max, row) => Math.max(max, Number(/^Link (\d+)$/.exec(row.label)?.[1] || 0)), 0);
     this.db.prepare('INSERT OR IGNORE INTO link_sequence VALUES (1, ?)').run(highest + 1);
@@ -80,5 +82,6 @@ export class Store extends EventEmitter {
   }
   resolve(token, now = Date.now()) { return this.db.prepare('SELECT id, car_id, expires_at FROM shares WHERE token_hash = ? AND expires_at > ?').get(hash(token), now); }
   list() { return this.db.prepare('SELECT id, car_id, label, expires_at, created_at, encrypted_token IS NOT NULL AS recoverable FROM shares ORDER BY created_at DESC').all(); }
+  pruneExpired(now = Date.now()) { return this.db.prepare('DELETE FROM shares WHERE expires_at <= ?').run(now - expiredLinkRetentionMs).changes; }
   revoke(id) { this.db.prepare('DELETE FROM shares WHERE id = ?').run(id); this.emit('revoke'); }
 }

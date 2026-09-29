@@ -56,7 +56,7 @@ You can also run the Docker image on a VM or another always-on container host wi
 ## Sharing behavior
 
 - Links use 256-bit random bearer tokens. SHA-256 hashes are used for public lookups. New tokens are also stored encrypted with AES-256-GCM so an authenticated admin can recover an active link using Copy link. The encryption key is saved beside the database as `eta.sqlite.key`; preserve it with the database volume and backups. Existing hash-only links continue working but cannot be recovered. Expired and revoked links cannot be recovered.
-- Each link grants access to one car for 1 hour through 7 days. Revocation closes active SSE streams immediately; expiry is checked every second. The viewer clears the tracking page when sharing ends. Data a recipient already saved cannot be withdrawn.
+- Each link grants access to one car for 1 hour through 7 days. Revocation closes active SSE streams immediately; expiry is checked every second. Expired links remain in the admin list with a Remove action for 24 hours, then their database records are deleted automatically on startup or during the next minute. The viewer clears the tracking page when sharing ends. Data a recipient already saved cannot be withdrawn.
 - Links follow the **vehicle**, including subsequent navigation destinations, until expiration or revocation. They do not automatically stop on arrival. Choose a short expiry for a single trip.
 - Nothing exposes a public vehicle list or raw MQTT topic stream. Only the fields used for the trip snapshot are returned.
 - No position history is stored. Links survive restarts; telemetry is restored from MQTT messages.

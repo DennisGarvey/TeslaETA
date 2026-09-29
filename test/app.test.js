@@ -76,23 +76,57 @@ import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 test('encrypted links recover after restart, expire, and migrate legacy records safely', () => {
   const dir = mkdtempSync(join(tmpdir(), 'eta-recovery-')), path = join(dir, 'eta.sqlite');
+  const now = Date.now();
   try {
     const legacy = new DatabaseSync(path);
     legacy.exec('CREATE TABLE shares (id TEXT PRIMARY KEY, token_hash TEXT UNIQUE NOT NULL, car_id TEXT NOT NULL, label TEXT NOT NULL, expires_at INTEGER NOT NULL, created_at INTEGER NOT NULL)');
     legacy.prepare('INSERT INTO shares VALUES (?, ?, ?, ?, ?, ?)').run('old', 'old-hash', '1', 'Older link', 9999999, 1000); legacy.close();
     let store = new Store(path);
     assert.equal(store.recover('old', 1001), null);
-    const share = store.create('1', 'New link', 1, 1000);
-    assert.equal(store.recover(share.id, 1001), share.token);
+    const share = store.create('1', 'New link', 1, now);
+    assert.equal(store.recover(share.id, now + 1), share.token);
     assert.ok(!JSON.stringify(store.db.prepare('SELECT * FROM shares').all()).includes(share.token));
     store.db.close();
     assert.ok(!readFileSync(path).includes(Buffer.from(share.token)));
     store = new Store(path);
-    assert.equal(store.recover(share.id, 2000), share.token);
-    assert.equal(store.recover(share.id, 3601000), null);
-    store.revoke(share.id); assert.equal(store.recover(share.id, 2000), null);
+    assert.equal(store.recover(share.id, now + 1000), share.token);
+    assert.equal(store.recover(share.id, now + 3600000), null);
+    store.revoke(share.id); assert.equal(store.recover(share.id, now + 1000), null);
     store.db.close();
   } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('expired links remain removable for 24 hours, then are pruned', () => {
+  const store = new Store(':memory:');
+  const now = Date.now(), hour = 60 * 60 * 1000;
+  try {
+    const old = store.create('1', 'Old', 1, now - 25 * hour - 1);
+    const boundary = store.create('1', 'Boundary', 1, now - 25 * hour);
+    const recent = store.create('1', 'Recent', 1, now - 25 * hour + 1);
+    const active = store.create('1', 'Active', 1, now);
+    assert.equal(store.pruneExpired(now - 1), 1);
+    assert.deepEqual(store.list().map(share => share.id).sort(), [boundary.id, recent.id, active.id].sort());
+    assert.equal(store.pruneExpired(now), 1);
+    assert.deepEqual(store.list().map(share => share.id).sort(), [recent.id, active.id].sort());
+    assert.equal(store.pruneExpired(now + 1), 1);
+    assert.deepEqual(store.list().map(share => share.id), [active.id]);
+    assert.ok(!store.list().some(share => share.id === old.id));
+  } finally { store.db.close(); }
+});
+
+test('startup removes links more than 24 hours past expiry', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'eta-prune-')), path = join(dir, 'eta.sqlite');
+  const now = Date.now(), hour = 60 * 60 * 1000;
+  let store;
+  try {
+    store = new Store(path);
+    const old = store.create('1', 'Old', 1, now - 25 * hour - 1000);
+    const recent = store.create('1', 'Recent', 1, now - 25 * hour + 60_000);
+    store.db.close();
+    store = new Store(path);
+    assert.deepEqual(store.list().map(share => share.id), [recent.id]);
+    assert.ok(!store.list().some(share => share.id === old.id));
+  } finally { store?.db.close(); rmSync(dir, { recursive: true, force: true }); }
 });
 
 test('generic sequence persists while numbered links remain active', () => {

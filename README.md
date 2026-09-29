@@ -1,111 +1,57 @@
 # Tesla ETA
 
-A small self-hosted or cloud-hosted app for sharing a Tesla's live location and navigation ETA from TeslaMate. Node.js maintains one MQTT-over-WebSocket connection; viewers receive restricted snapshots over server-sent events (SSE). MQTT updates are coalesced over 150 ms, and a 15-second heartbeat refreshes stale-data status. The browser reconnects automatically. The admin list still refreshes every 15 seconds. No MQTT credentials reach the browser.
+Share a TeslaMate vehicle's location and navigation ETA through time-limited links. The app subscribes to TeslaMate's MQTT topics, serves the admin dashboard and viewer pages, and stores sharing links in SQLite.
 
-## Local live preview
+## Set up access
 
-Requires Node.js 22.13+ (Node 24 recommended).
+Use an HTTPS hostname for the app. In Cloudflare Access, protect **both `/admin` and `/admin/*`** with a self-hosted application for your administrators; [the wildcard does not cover the parent path](https://developers.cloudflare.com/cloudflare-one/access-controls/policies/app-paths/). Leave `/s/*` accessible to link recipients. Set these environment variables for the app:
 
-```sh
-cp .env.example .env
-# Fill in your MQTT endpoint and service token in .env
-# Set PUBLIC_ORIGIN=http://127.0.0.1:3000 for local preview
-npm ci
-npm run dev
+```dotenv
+PUBLIC_ORIGIN=https://eta.example.com
+CF_ACCESS_TEAM_DOMAIN=https://your-team.cloudflareaccess.com
+CF_ACCESS_ADMIN_AUD=your-admin-application-audience-tag
 ```
 
-Open http://127.0.0.1:3000/admin, create a link, then open its preview. Local preview uses your real MQTT data and SQLite database, disables admin authentication, and binds only to loopback. Never expose this mode through a tunnel or reverse proxy. There is no simulated-data mode.
+`PUBLIC_ORIGIN` must be the hostname used to open the admin page. Use the Access application's Audience (AUD) tag for `CF_ACCESS_ADMIN_AUD`. The app verifies the Access JWT using the team domain and audience tag; both values are required in production. The origin also supplies the initial address for sharing links. You can change the sharing address later under **Admin → Settings**, provided that address routes to this app.
 
-## Production configuration
+## Run with Docker
 
-Copy `.env.example` to `.env`. Set these values:
-
-- `PUBLIC_ORIGIN`: your public HTTPS origin, e.g. `https://eta.example.com`.
-- `MQTT_URL`: the full broker WebSocket URL, e.g. `wss://mqtt.example.com/mqtt`. Use the actual path your broker exposes.
-- `CF_ACCESS_CLIENT_ID` and `CF_ACCESS_CLIENT_SECRET`: the optional service token for the **MQTT Access application**, not your admin application. Omit both for brokers without Access.
-- `MQTT_USERNAME` and `MQTT_PASSWORD`: separate broker credentials if required. Grant read-only access to `teslamate/cars/+/+`.
-- `CF_ACCESS_TEAM_DOMAIN`: `https://your-team.cloudflareaccess.com`.
-- `CF_ACCESS_ADMIN_AUD`: the audience tag of your **admin Access application**.
-- `DATABASE_PATH`: persistent SQLite file; Docker uses `/data/eta.sqlite`.
-- `LOCAL_PREVIEW=false`.
-
-### Cloudflare Access
-
-1. On the MQTT hostname, configure a **Service Auth** policy accepting the service token. The server opens a WSS connection using `new WebSocket(url, ['mqtt'], { headers: ... })`. This generates `Sec-WebSocket-Protocol: mqtt`, alongside `CF-Access-Client-Id` and `CF-Access-Client-Secret`. These are service-token credentials; a browser service worker cannot safely hold them.
-2. On the ETA hostname, create a separate self-hosted Access application protecting **both `/admin` and `/admin/*`**, allowing only your identities. All admin pages, scripts, status, link creation/listing, and revocation are under that prefix.
-3. Leave `/s/*` public so recipients can use their links without logging in. Avoid an Access rule covering the entire ETA hostname unless public shares are explicitly excluded.
-4. The server verifies the Access JWT signature, issuer, audience, and expiration on every admin request. Missing configuration fails closed. Merely sending a forged Access header does not authenticate a user. Admin mutations also check the origin and a custom request header.
-5. Disable caching for this app in any custom Cloudflare cache rules. Responses already include `Cache-Control: no-store`. Avoid logging `/s/` URLs in analytics or access logs because they contain bearer tokens.
-
-### Option A: self-hosted Docker
+The included [compose.yaml](compose.yaml) builds the app, binds it to `127.0.0.1:3000`, and keeps the database in the `eta-data` volume:
 
 ```sh
 cp .env.example .env
-# Fill in .env, then:
+# Set the three production values above in .env
 docker compose up -d --build
 ```
 
-The published port is loopback-only (`127.0.0.1:3000`). Point a host-based Cloudflare Tunnel or reverse proxy to `http://localhost:3000`. If cloudflared runs in Docker, attach it to the app's Docker network and target `http://tesla-eta:3000` instead. Apply the Access rules above. The named `eta-data` volume preserves links across restarts. Keep one application instance.
+Point your reverse proxy or Cloudflare Tunnel at `http://127.0.0.1:3000`. If the tunnel runs in Docker on the same network, target `http://tesla-eta:3000` instead. If using Nginx, disable buffering for the viewer and admin event streams. Keep one app instance and preserve the volume during upgrades and backups; it contains both `eta.sqlite` and its encryption key.
 
-### Option B: cloud hosting
+If you add Tesla ETA to an existing TeslaMate Compose stack, use `build: ./teslaeta`, pass the three production variables to that service, mount a persistent volume at `/data`, and publish the container's port 3000 to a local host port. The broker URL in **Admin → MQTT connection** can then be `mqtt://mosquitto:1883` when the services share a Compose network. No public broker port is needed for this connection.
 
-The included `render.yaml` deploys the same Docker app to a Render web service with a persistent disk. Push the repository to your Git provider, create a Render Blueprint from it, and fill in the prompted environment values. This configuration uses a paid service and disk; inspect the provider's cost before creating it. Add your custom domain through Render, put it behind Cloudflare, set `PUBLIC_ORIGIN` to that domain, and configure the Access application above. Keep a single instance and ensure the persistent disk is writable by the container's `node` user (UID 1000).
+A [Render Blueprint](render.yaml) is also provided. It uses the same Dockerfile with a persistent disk at `/data`. Set the required production variables, ensure the disk is writable by the container's `node` user (UID 1000), then connect your HTTPS domain through Cloudflare Access as above.
 
-You can also run the Docker image on a VM or another always-on container host with a writable volume mounted at `/data`. Static hosting and request-only/serverless hosting are not suitable for this implementation's persistent MQTT connection and SQLite storage. No cloud resources are created by this repository.
+## Connect TeslaMate
 
-## Sharing behavior
+Open **`/admin` → MQTT connection** and enter the broker URL:
 
-- Links use 256-bit random bearer tokens. SHA-256 hashes are used for public lookups. New tokens are also stored encrypted with AES-256-GCM so an authenticated admin can recover an active link using Copy link. The encryption key is saved beside the database as `eta.sqlite.key`; preserve it with the database volume and backups. Existing hash-only links continue working but cannot be recovered. Expired and revoked links cannot be recovered.
-- Each link grants access to one car for 1 hour through 7 days. Revocation closes active SSE streams immediately; expiry is checked every second. Expired links remain in the admin list with a Remove action for 24 hours, then their database records are deleted automatically on startup or during the next minute. The viewer clears the tracking page when sharing ends. Data a recipient already saved cannot be withdrawn.
-- Links follow the **vehicle**, including subsequent navigation destinations, until expiration or revocation. They do not automatically stop on arrival. Choose a short expiry for a single trip.
-- Nothing exposes a public vehicle list or raw MQTT topic stream. Only the fields used for the trip snapshot are returned.
-- No position history is stored. Links survive restarts; telemetry is restored from MQTT messages.
-- Retained MQTT values have unknown source age and are marked as last-known. Live freshness uses server receipt time, not an unavailable Tesla source timestamp. Speed and route estimates are suppressed after two minutes without a non-retained update or when MQTT disconnects. Freshness thresholds may need tuning for your TeslaMate publishing interval.
-- Arrival is anchored to the receipt time of the navigation update, not recalculated as “now plus minutes” on every refresh. Arrival is shown in the viewer's time zone. Traffic delay is displayed separately, not added again.
-- No route line is drawn: TeslaMate does not provide the Tesla navigation route polyline in these fields.
-- OpenStreetMap supplies map tiles, including attribution. Tile requests disclose the viewed map area to the tile provider. Use a suitable tile service for higher-volume deployments.
+- `mqtt://` or `mqtts://` for MQTT; `ws://` or `wss://` for MQTT over WebSocket. Include the broker's WebSocket path when it has one. The URL selects the transport.
+- Broker username and password are optional. For an account dedicated to this app, allow subscription to `teslamate/cars/+/+` and deny publication.
+- If the WebSocket endpoint is behind Cloudflare Access, create a Service Auth policy for the MQTT hostname, then enable its service token in the dashboard and enter the client ID and secret. This requires `wss://` and is separate from the Access application protecting `/admin`.
 
-## Fields
+**Save and connect** applies the settings immediately. A saved connection takes precedence over the optional MQTT environment variables below. Blank secret fields keep their saved values.
 
-Uses TeslaMate's current JSON `location` and `active_route` topics rather than deprecated separate coordinates. Also reads `speed` (km/h), `heading`, `display_name`, `state`, `healthy`, and `battery_level`. The viewer shows destination, location, speed, minutes remaining, arrival time, distance remaining, estimated arrival battery, traffic delay, and freshness. It displays an original red navigation arrow styled similarly to Tesla's directional marker.
+On **Sharing**, choose a vehicle and an expiry, then create a link. Treat the link as a secret: anyone with it can view that vehicle until it expires or is revoked. It continues to follow later destinations. The sharing address defaults to `PUBLIC_ORIGIN`; change it under **Settings** if recipients use another hostname that routes to the same app.
 
-Useful optional future additions are a user-selectable vehicle nickname and automatic trip-end expiry. Door/lock state, VIN, odometer, and home geofence labels are unnecessary for recipients and are not shared.
+## Environment options
 
-## Verification
+- `PUBLIC_ORIGIN` — required HTTPS origin for the app and admin requests; initial sharing-link origin.
+- `CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_ADMIN_AUD` — required production admin authentication settings.
+- `MQTT_URL`, `MQTT_USERNAME`, `MQTT_PASSWORD` — optional starting broker settings. Dashboard settings override them once saved.
+- `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET` — optional MQTT WebSocket service token used with `MQTT_URL`.
+- `DATABASE_PATH` — SQLite file location. Docker sets `/data/eta.sqlite`.
+- `PORT` — HTTP port, default `3000`.
+- `LOCAL_PREVIEW` — set to `true` only for local development. It binds to loopback and skips admin authentication.
 
-```sh
-npm test
-```
+For local development, copy `.env.example` to `.env`, set `PUBLIC_ORIGIN=http://127.0.0.1:3000`, then run `npm ci` and `npm run dev`. Node.js 22.13 or later is required. Run the test suite with `npm test`.
 
-Tests cover expiry/revocation, token hashing, per-car isolation, protected admin routes, cross-origin mutation rejection, retained data, stale ETA, malformed coordinates, and route clearing. The local live preview lets you exercise create/copy/open/revoke. Real Cloudflare/MQTT integration needs your own credentials and endpoint. Run Docker/cloud deployment checks in the destination environment.
-
-## References
-
-- [TeslaMate MQTT fields](https://docs.teslamate.org/docs/integrations/mqtt/)
-- [MQTT.js WebSocket options](https://github.com/mqttjs/MQTT.js)
-- [Cloudflare service tokens](https://developers.cloudflare.com/cloudflare-one/access-controls/service-credentials/service-tokens/)
-- [Cloudflare JWT validation](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/authorization-cookie/validating-json/)
-- [Render Blueprint configuration](https://render.com/docs/blueprint-spec)
-
-## Read-only MQTT
-
-The app only subscribes; it never calls MQTT publish and configures no last will. An application guard rejects both publish methods and rejects any last-will configuration. CONNECT, SUBSCRIBE, PINGREQ, and DISCONNECT are protocol control packets, not topic publications. For independent enforcement, give its MQTT account read-only ACLs for `teslamate/cars/+/+` and deny topic writes. Cloudflare service tokens authenticate the WebSocket handshake, not MQTT topic permissions.
-
-The map automatically fits the vehicle and destination until the viewer pans or zooms. Recenter resumes tracking. The viewer fits desktop and phone viewports; extremely small screens and enlarged text can scroll to preserve access to controls.
-The icon controls in the header select automatic, light, or dark appearance. Automatic is the default and follows the device setting; a manual choice is remembered in that browser. The viewer's unit selector is beside them.
-
-## MQTT settings in the admin page
-
-Open **MQTT connection** under `/admin`. Enter the broker URL; its protocol automatically selects regular MQTT (`mqtt://` or `mqtts://`) or WebSocket (`ws://` or `wss://`), and optionally add broker credentials. HTTPS/HTTP URLs entered for WebSocket are converted to WSS/WS. Cloudflare service tokens are optional and require WSS. The form accepts either token values or `CF-Access-Client-Id: value` and `CF-Access-Client-Secret: value`; known header prefixes and surrounding whitespace are removed. Multiline values are rejected.
-
-Saved settings override environment defaults and reconnect immediately. They are encrypted in SQLite using the same persisted key as recovered sharing links. Secret values are never returned to the browser: blank fields keep saved secrets, the clear-password checkbox removes the broker password, and disabling Cloudflare removes its service token. Switching brokers clears cached telemetry; existing links select the same numeric car IDs on the new broker, so revoke existing links before switching to an unrelated fleet.
-
-For reverse proxies, disable SSE buffering and retain connections longer than the 15-second heartbeat. Nginx should use `proxy_buffering off` and an appropriate `proxy_read_timeout` on `/s/*/events`. The application sends `X-Accel-Buffering: no` and `Cache-Control: no-store, no-transform`.
-
-The admin dashboard shows live viewer counts for each link via a protected SSE endpoint under `/admin`. Counts represent active viewing tabs (not unique people) and drop when their streams close, links expire, or links are revoked. Lost network connections may remain counted until the server detects the disconnect. Counts are in-memory and reset on restart, then rebuild as viewers reconnect.
-
-## Public sharing URL
-
-Set the public origin in **Admin → Settings → Sharing URL**. It is persisted in SQLite and takes effect immediately for created and recovered links. Saving does not configure DNS or hosting. Existing tokens are unchanged. `PUBLIC_ORIGIN` remains the production app/admin origin used for request-origin validation and the initial default for sharing links; changing the dashboard sharing URL does not change that security setting. Public sharing URLs require HTTPS; loopback HTTP is accepted in local preview.
-
-Other environment settings are `PORT`, `DATABASE_PATH`, `LOCAL_PREVIEW`, `CF_ACCESS_TEAM_DOMAIN`, and `CF_ACCESS_ADMIN_AUD`. MQTT URL, broker credentials, and MQTT Cloudflare service-token variables are startup defaults overridden by the dashboard’s saved MQTT configuration. The Cloudflare admin audience and team domain remain environment-only to avoid changing admin authentication through the UI.
+[TeslaMate MQTT topics](https://docs.teslamate.org/docs/integrations/mqtt/) · [Cloudflare Access service tokens](https://developers.cloudflare.com/cloudflare-one/access-controls/service-credentials/service-tokens/)

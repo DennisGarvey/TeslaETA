@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f3f1ec">
+  <meta name="description" content="Tesla ETA turns TeslaMate MQTT data into time-limited links for vehicle location and navigation arrival time.">
+  <meta property="og:title" content="Tesla ETA — share your Tesla's ETA">
+  <meta property="og:description" content="Time-limited location and ETA sharing for TeslaMate.">
+  <meta property="og:type" content="website">
+  <title>Tesla ETA — ETA sharing for TeslaMate</title>
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg">
+  <link rel="stylesheet" href="./style.css">
+  <script src="./preview.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="wordmark" href="#top" aria-label="Tesla ETA, back to top">
+        <svg viewBox="0 0 36 36" aria-hidden="true"><path d="M18 3 32 33 18 25 4 33Z"/></svg>
+        <span>Tesla ETA</span>
+      </a>
+      <nav class="site-nav" aria-label="Main navigation">
+        <a href="#features">Features</a>
+        <a href="#deploy">Deploy</a>
+      </nav>
+      <a class="header-link" href="https://github.com/DennisGarvey/TeslaETA" target="_blank" rel="noopener noreferrer">GitHub</a>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero container" id="top" aria-labelledby="hero-title">
+      <div class="hero-copy">
+        <h1 id="hero-title">Share your<br>Tesla’s <span>ETA.</span></h1>
+        <p class="hero-description">Send a time-limited link showing your vehicle’s location, navigation destination, arrival time, and speed. Tesla ETA uses the MQTT data TeslaMate already publishes.</p>
+        <div class="hero-actions">
+          <a class="button button-primary" href="https://github.com/DennisGarvey/TeslaETA#standalone-docker-install" target="_blank" rel="noopener noreferrer">Setup guide</a>
+          <a class="text-link" href="#features">Explore features</a>
+        </div>
+      </div>
+
+      <figure class="product-figure">
+        <div class="product-window" id="product-preview">
+          <div class="window-topbar">
+            <span class="window-title">Tesla ETA</span>
+            <div class="preview-header-controls">
+              <div class="preview-theme-switch" role="group" aria-label="Preview appearance">
+                <button class="preview-theme-option" type="button" data-preview-theme="auto" aria-label="Automatic appearance" title="Automatic appearance" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 21h8m-4-3v3"/></svg></button>
+                <button class="preview-theme-option" type="button" data-preview-theme="light" aria-label="Light appearance" title="Light appearance" aria-pressed="true"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg></button>
+                <button class="preview-theme-option" type="button" data-preview-theme="dark" aria-label="Dark appearance" title="Dark appearance" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.3 15.3A8.5 8.5 0 0 1 8.7 3.7 8.5 8.5 0 1 0 20.3 15.3Z"/></svg></button>
+              </div>
+              <select class="preview-units" id="preview-units" aria-label="Preview units" title="Units"><option value="imperial">mi</option><option value="metric">km</option></select>
+            </div>
+          </div>
+          <div class="product-body">
+            <div class="trip-preview">
+              <p class="preview-label">DESTINATION</p>
+              <p class="preview-destination">Central Park</p>
+              <div class="preview-arrival">
+                <span>Estimated arrival</span>
+                <strong id="preview-arrival-time">—</strong>
+              </div>
+              <div class="preview-metrics" aria-live="polite">
+                <div><strong id="preview-minutes">18</strong><span>min remaining</span></div>
+                <div><strong id="preview-speed">42</strong><span id="preview-speed-unit">mph</span></div>
+                <div><strong id="preview-distance">9.6</strong><span id="preview-distance-unit">mi remaining</span></div>
+              </div>
+              <div class="preview-secondary">
+                <div><span>Battery at arrival</span><strong>58%</strong></div>
+                <div><span>Traffic delay</span><strong>2 min</strong></div>
+              </div>
+            </div>
+            <div class="map-preview" aria-hidden="true">
+              <svg class="street-map" viewBox="0 0 640 590" preserveAspectRatio="xMidYMid slice">
+                <rect width="640" height="590" fill="#e6e5df"/>
+                <g fill="#ddddd6">
+                  <path d="M20 80h120v90H20zM170 40h120v95H170zM370 35h190v92H370zM45 250h145v96H45zM235 230h115v120H235zM420 270h165v90H420zM55 430h160v100H55zM270 440h135v100H270zM470 420h105v120H470z"/>
+                </g>
+                <g fill="none" stroke="#faf9f6" stroke-width="13" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M-40 204 164 201 354 145 680 149"/><path d="M-20 398 198 394 360 380 665 376"/>
+                  <path d="M157-30 153 195 214 399 221 630"/><path d="M380-20 377 156 408 375 418 620"/>
+                  <path d="M555-20 550 170 592 385 595 620"/>
+                  <path d="M-20 41 104 37 227 45 338-15"/><path d="M-10 545 133 538 276 559 417 590"/>
+                  <path d="M50 200 70 82 153 40"/><path d="M367 150 420 273 556 375"/>
+                </g>
+                <g fill="none" stroke="#cfcec6" stroke-width="26" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M-30 310C100 307 190 323 280 287S470 201 680 225"/>
+                </g>
+                <path d="M-30 310C100 307 190 323 280 287S470 201 680 225" fill="none" stroke="#f5f3ee" stroke-width="14" stroke-linecap="round"/>
+                <g fill="none" stroke="#fbfaf7" stroke-width="5" opacity=".85">
+                  <path d="M39 41v125m229-108v119m205-135v141M70 433v91m228-222v90m202-116v87"/>
+                </g>
+              </svg>
+              <div class="map-control"><span>+</span><span>−</span></div>
+              <div class="destination-point"><svg viewBox="0 0 38 48"><path d="M19 46C15 39 3 27 3 18a16 16 0 1 1 32 0c0 9-12 21-16 28Z"/><circle cx="19" cy="18" r="5"/></svg></div>
+              <div class="vehicle-point"><svg viewBox="0 0 48 48"><path d="M24 3 43 44 24 35 5 44Z"/></svg></div>
+              <span class="map-attribution">Map illustration</span>
+            </div>
+          </div>
+        </div>
+        <figcaption>Illustrative trip view</figcaption>
+      </figure>
+    </section>
+
+    <section class="features container" id="features" aria-labelledby="features-title">
+      <div class="section-heading">
+        <p class="section-index">FEATURES</p>
+        <h2 id="features-title">What a viewer sees.</h2>
+      </div>
+      <div class="feature-list">
+        <article class="feature-row">
+          <span class="feature-number">01</span>
+          <h3>Arrival estimates</h3>
+          <p>Minutes remaining, local arrival time, distance, speed, battery estimate, and traffic delay sit together on one screen.</p>
+        </article>
+        <article class="feature-row">
+          <span class="feature-number">02</span>
+          <h3>Vehicle and destination</h3>
+          <p>See the vehicle and the destination set in Tesla navigation. The map follows updates, or you can move it and recenter later.</p>
+        </article>
+        <article class="feature-row">
+          <span class="feature-number">03</span>
+          <h3>Time-limited links</h3>
+          <p>Choose a vehicle and expiry, share the link, and revoke it whenever you need to. The admin page shows how many viewing tabs are open.</p>
+        </article>
+        <article class="feature-row">
+          <span class="feature-number">04</span>
+          <h3>Fleet map for admins</h3>
+          <p>The admin list shows every vehicle. Select one to follow its location, or show all vehicles with available locations on the map.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="deploy-section container" id="deploy" aria-labelledby="deploy-title">
+      <div>
+        <p class="section-index">DEPLOYMENT</p>
+        <h2 id="deploy-title">Deploy with Docker Compose.</h2>
+      </div>
+      <div class="deploy-copy">
+        <p>Add the container to your TeslaMate Compose stack, or run it on its own. Configure the broker and create links from the admin page.</p>
+        <div class="terminal" aria-label="Docker Compose update command"><span class="terminal-prompt">$</span><code>docker compose up -d --build tesla-eta</code></div>
+        <p class="terminal-note">Command shown for an existing TeslaMate Compose stack.</p>
+        <a class="button button-dark" href="https://github.com/DennisGarvey/TeslaETA#alongside-a-teslamate-compose-stack" target="_blank" rel="noopener noreferrer">Read the setup guide</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-inner"><span>Tesla ETA</span><a href="https://github.com/DennisGarvey/TeslaETA" target="_blank" rel="noopener noreferrer">View source on GitHub</a></div>
+  </footer>
+</body>
+</html>

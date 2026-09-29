@@ -14,7 +14,7 @@ CF_ACCESS_ADMIN_AUD=your-admin-application-audience-tag
 
 `PUBLIC_ORIGIN` must be the hostname used to open the admin page. Use the Access application's Audience (AUD) tag for `CF_ACCESS_ADMIN_AUD`. The app verifies the Access JWT using the team domain and audience tag; both values are required in production. The origin also supplies the initial address for sharing links. You can change the sharing address later under **Admin → Settings**, provided that address routes to this app.
 
-## Run with Docker
+## Standalone Docker install
 
 The included [compose.yaml](compose.yaml) builds the app, binds it to `127.0.0.1:3000`, and keeps the database in the `eta-data` volume:
 
@@ -24,11 +24,34 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-Point your reverse proxy or Cloudflare Tunnel at `http://127.0.0.1:3000`. If the tunnel runs in Docker on the same network, target `http://tesla-eta:3000` instead. If using Nginx, disable buffering for the viewer and admin event streams. Keep one app instance and preserve the volume during upgrades and backups; it contains both `eta.sqlite` and its encryption key.
+Point your reverse proxy or Cloudflare Tunnel at `http://127.0.0.1:3000`. If the tunnel runs in Docker on the same network, target `http://tesla-eta:3000` instead.
 
-If you add Tesla ETA to an existing TeslaMate Compose stack, use `build: ./teslaeta`, pass the three production variables to that service, mount a persistent volume at `/data`, and publish the container's port 3000 to a local host port. The broker URL in **Admin → MQTT connection** can then be `mqtt://mosquitto:1883` when the services share a Compose network. No public broker port is needed for this connection.
+## Alongside a TeslaMate Compose stack
 
-A [Render Blueprint](render.yaml) is also provided. It uses the same Dockerfile with a persistent disk at `/data`. Set the required production variables, ensure the disk is writable by the container's `node` user (UID 1000), then connect your HTTPS domain through Cloudflare Access as above.
+Clone this repository as `teslaeta` beside your TeslaMate `docker-compose.yml`. Add this service under `services:` and the volume under the existing top-level `volumes:`:
+
+```yaml
+services:
+  tesla-eta:
+    build: ./teslaeta
+    restart: unless-stopped
+    environment:
+      PUBLIC_ORIGIN: https://eta.example.com
+      CF_ACCESS_TEAM_DOMAIN: https://your-team.cloudflareaccess.com
+      CF_ACCESS_ADMIN_AUD: your-admin-application-audience-tag
+      DATABASE_PATH: /data/eta.sqlite
+    ports:
+      - "127.0.0.1:3001:3000"
+    volumes:
+      - eta-data:/data
+
+volumes:
+  eta-data:
+```
+
+Use your own hostname and Access values, then run `docker compose up -d --build tesla-eta` from the TeslaMate directory. Point the proxy or tunnel at `http://127.0.0.1:3001`; a tunnel container on the same Compose network can use `http://tesla-eta:3000`. In **Admin → MQTT connection**, use `mqtt://mosquitto:1883` if the broker service is named `mosquitto`.
+
+For either install, keep one app instance and preserve the `/data` volume during upgrades and backups; it contains `eta.sqlite` and its encryption key. If using Nginx, disable buffering for the viewer and admin event streams.
 
 ## Connect TeslaMate
 

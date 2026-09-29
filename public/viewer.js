@@ -11,15 +11,19 @@ const tracking = followLocations(map,
   points => map.fitBounds(L.latLngBounds(points), { ...safeFitPadding(map.getSize()), maxZoom: 15, animate: false }), $('fit'));
 $('units').onchange = () => latest && render(latest);
 const number = n => n == null ? '—' : Math.round(n).toString();
+function renderTime() {
+  const arrivalAt = latest?.arrivalAt;
+  $('minutes').textContent = arrivalAt == null ? '—' : String(Math.max(0, Math.ceil((arrivalAt - Date.now()) / 60000)));
+  $('arrival').textContent = arrivalAt == null ? '—' : new Date(arrivalAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}
 function render(data) {
   const imperial = $('units').value === 'imperial';
-  $('status').textContent = data.connected && data.locationFresh ? 'Live' : 'Last known data';
   $('vehicle').textContent = data.name || 'Tesla';
   $('destination').textContent = data.route?.destination || 'No active destination';
-  $('notice').textContent = data.waiting ? 'Waiting for vehicle data.' : !data.connected ? 'Vehicle connection interrupted. Values may be out of date.' : !data.route ? 'Navigation inactive. No arrival estimate available.' : !data.locationFresh || !data.routeFresh ? 'Some data is stale or retained. Waiting for fresh vehicle updates.' : 'Updating automatically.';
-  $('minutes').textContent = data.arrivalAt ? String(Math.max(0, Math.ceil((data.arrivalAt - Date.now()) / 60000))) : '—';
-  $('arrival').textContent = data.arrivalAt ? new Date(data.arrivalAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '—';
-  $('timezone').textContent = data.arrivalAt ? `Your time · ${Intl.DateTimeFormat().resolvedOptions().timeZone}` : 'Waiting for a current estimate';
+  const notice = data.waiting ? 'Waiting for vehicle data.' : !data.connected ? 'Vehicle connection interrupted. Values may be out of date.' : !data.route ? 'Navigation inactive. No arrival estimate available.' : !data.locationFresh || !data.routeFresh ? 'Some data is stale or retained. Waiting for fresh vehicle updates.' : '';
+  $('notice').textContent = notice;
+  $('notice').hidden = !notice;
+  renderTime();
   $('speed').textContent = data.speedFresh ? number(data.speed == null ? null : data.speed * (imperial ? 0.621371 : 1)) : '—';
   $('speed-unit').textContent = imperial ? 'mph' : 'km/h';
   $('distance').textContent = data.routeFresh && data.route?.miles != null ? (data.route.miles * (imperial ? 1 : 1.609344)).toFixed(1) : '—';
@@ -35,20 +39,21 @@ function render(data) {
   tracking.update();
 }
 const stream = new EventSource(`${location.pathname.replace(/\/$/, '')}/events`);
+const clock = setInterval(renderTime, 10000);
 stream.addEventListener('snapshot', event => {
   try { latest = JSON.parse(event.data); render(latest); }
   catch { $('notice').textContent = 'Unable to display the latest update.'; }
 });
 stream.addEventListener('ended', () => {
   stream.close();
+  clearInterval(clock);
   document.querySelector('.journey').replaceChildren(Object.assign(document.createElement('p'), { className: 'unavailable', textContent: 'This sharing link has expired or was revoked.' }));
-  $('status').textContent = 'Sharing ended';
 });
 stream.onerror = () => {
   if (latest) { latest.connected = false; latest.locationFresh = false; latest.routeFresh = false; latest.speedFresh = false; latest.arrivalAt = null; render(latest); }
-  $('status').textContent = 'Reconnecting';
   $('notice').textContent = 'Connection lost. Showing the last known location while reconnecting.';
+  $('notice').hidden = false;
 };
-window.addEventListener('pagehide', () => stream.close());
+window.addEventListener('pagehide', () => { stream.close(); clearInterval(clock); });
 // A page restored from the back-forward cache needs a fresh EventSource.
 window.addEventListener('pageshow', event => { if (event.persisted) location.reload(); });

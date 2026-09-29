@@ -58,6 +58,7 @@ test('live admin counts track joins, disconnects, per-link isolation and revocat
     const one = f.store.create('1', 'First', 1), two = f.store.create('1', 'Second', 1);
     const admin = await openStream(`${f.base}/admin/api/viewers/events`); streams.push(admin);
     assert.deepEqual((await admin.event()).data, {});
+    assert.deepEqual(await admin.event(), { type: 'connection', data: { connected: true, configured: false } });
     const a = await openStream(`${f.base}/s/${one.token}/events`); streams.push(a); await a.event();
     assert.equal((await admin.event()).data[one.id], 1);
     const b = await openStream(`${f.base}/s/${one.token}/events`); streams.push(b); await b.event();
@@ -71,6 +72,8 @@ test('live admin counts track joins, disconnects, per-link isolation and revocat
     f.store.revoke(one.id); await b.event();
     assert.deepEqual((await admin.event()).data, { [two.id]: 1 });
     await c.reader.cancel(); assert.deepEqual((await admin.event()).data, {});
+    f.telemetry.connected = false;
+    assert.deepEqual(await admin.event(), { type: 'connection', data: { connected: false, configured: false } });
   } finally {
     for (const stream of streams) await stream.reader.cancel().catch(() => {});
     f.server.closeAllConnections(); await new Promise(resolve => f.server.close(resolve)); f.store.db.close();

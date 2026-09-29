@@ -50,7 +50,7 @@ export function createApp({ telemetry, store, config, verifyAdmin, connection })
     res.json(connection.publicSettings());
   });
   app.get('/admin/api/status', (req, res) => res.json({ localPreview: config.localPreview, connected: telemetry.connected, configured: connection ? !!connection.settings : config.mqttConfigured, nextLinkName: store.nextLinkName(), cars: [...telemetry.cars.keys()].map(id => telemetry.snapshot(id)) }));
-  app.get('/admin/api/viewers/events', (req, res) => streamViewers(req, res, viewers));
+  app.get('/admin/api/viewers/events', (req, res) => streamViewers(req, res, viewers, telemetry, () => connection ? !!connection.settings : config.mqttConfigured));
   app.get('/admin/api/shares', (req, res) => res.json(store.list().map(share => ({ ...share, viewers: viewers.count(share.id) }))));
   app.get('/admin/api/shares/:id/link', (req, res) => {
     const token = store.recover(req.params.id);
@@ -75,6 +75,7 @@ export function createApp({ telemetry, store, config, verifyAdmin, connection })
   app.get('/admin/app.js', (req, res) => res.sendFile(`${publicDir}admin.js`));
   app.get(['/admin', '/admin/'], (req, res) => res.sendFile(`${publicDir}admin.html`));
   app.get('/assets/style.css', (req, res) => res.sendFile(`${publicDir}style.css`));
+  app.get('/assets/theme.js', (req, res) => res.sendFile(`${publicDir}theme.js`));
   app.get('/assets/map-follow.js', (req, res) => res.sendFile(`${publicDir}map-follow.js`));
   app.get('/assets/viewer.js', (req, res) => res.sendFile(`${publicDir}viewer.js`));
   app.use('/assets/leaflet', express.static(fileURLToPath(new URL('../node_modules/leaflet/dist/', import.meta.url))));

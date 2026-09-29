@@ -92,6 +92,7 @@ Tests cover expiry/revocation, token hashing, per-car isolation, protected admin
 The app only subscribes; it never calls MQTT publish and configures no last will. An application guard rejects both publish methods and rejects any last-will configuration. CONNECT, SUBSCRIBE, PINGREQ, and DISCONNECT are protocol control packets, not topic publications. For independent enforcement, give its MQTT account read-only ACLs for `teslamate/cars/+/+` and deny topic writes. Cloudflare service tokens authenticate the WebSocket handshake, not MQTT topic permissions.
 
 The map automatically fits the vehicle and destination until the viewer pans or zooms. Recenter resumes tracking. The viewer fits desktop and phone viewports; extremely small screens and enlarged text can scroll to preserve access to controls.
+The icon controls in the header select automatic, light, or dark appearance. Automatic is the default and follows the device setting; a manual choice is remembered in that browser. The viewer's unit selector is beside them.
 
 ## MQTT settings in the admin page
 

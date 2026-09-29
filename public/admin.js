@@ -1,5 +1,28 @@
 const $ = id => document.getElementById(id);
 let displayedShareId = null;
+const shareUrls = new Map();
+const shareIcon = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3m0 0 4 4m-4-4L8 7M5 11v9h14v-9"/></svg>';
+$('share').innerHTML = shareIcon;
+function displayLink(id, url) {
+  displayedShareId = id;
+  $('created').hidden = false;
+  $('url').value = url;
+  $('open').href = url;
+}
+function showMqttConnection({ connected, configured }) {
+  $('mqtt-alert').hidden = !!connected;
+  $('mqtt-alert-text').textContent = configured ? 'MQTT is disconnected. Vehicle updates are unavailable.' : 'MQTT is not configured. Vehicle updates are unavailable.';
+}
+async function shareLink(url, id) {
+  if (!url) return;
+  if (!navigator.share || (navigator.canShare && !navigator.canShare({ url }))) {
+    if (id) displayLink(id, url);
+    await copyLink(url);
+    return;
+  }
+  try { await navigator.share({ title: 'Tesla ETA', url }); }
+  catch (error) { if (error.name !== 'AbortError') { if (id) displayLink(id, url); $('message').textContent = 'Unable to open sharing. Use Copy link instead.'; } }
+}
 async function api(path, options = {}) {
   const response = await fetch(`/admin/api/${path}`, { ...options, headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'TeslaETA' } });
   if (!response.ok) { const body = await response.json().catch(() => ({})); throw new Error(body.error || 'Request failed. Reload to sign in again.'); }
@@ -8,10 +31,19 @@ async function api(path, options = {}) {
 async function refresh() {
   try {
     const [status, shares] = await Promise.all([api('status'), api('shares')]);
+    showMqttConnection(status);
     if (displayedShareId && !shares.some(share => share.id === displayedShareId && share.expires_at > Date.now())) {
       displayedShareId = null; $('created').hidden = true; $('url').value = ''; $('open').removeAttribute('href'); $('message').textContent = '';
     }
     if (!$('connection-panel').hidden) { const settings = await api('connection'); $('connection-message').textContent = settings.status || ''; }
+    const activeShares = shares.filter(share => share.recoverable && share.expires_at > Date.now());
+    const activeIds = new Set(activeShares.map(share => share.id));
+    for (const id of shareUrls.keys()) if (!activeIds.has(id)) shareUrls.delete(id);
+    await Promise.all(activeShares.map(async share => {
+      if (shareUrls.has(share.id)) return;
+      try { shareUrls.set(share.id, (await api(`shares/${share.id}/link`)).url); }
+      catch { /* A link can expire or be revoked between list and recovery. */ }
+    }));
     const vehicleNames = new Map(status.cars.map(car => [car.id, car.name]));
     const previous = $('car').value;
     $('car').replaceChildren(...status.cars.map(car => new Option(car.name || `Tesla ${car.id}`, car.id)));
@@ -21,8 +53,10 @@ async function refresh() {
     if (!shares.length) $('shares').textContent = 'No sharing links yet.';
     for (const share of shares) {
       const row = document.createElement('div'); row.className = 'share-row';
-      const detail = document.createElement('div'), title = document.createElement('strong'), meta = document.createElement('p');
-      title.textContent = share.label || 'Vehicle link'; meta.className = 'muted';
+      const detail = document.createElement('div'), url = shareUrls.get(share.id);
+      const title = document.createElement(url ? 'a' : 'strong'), meta = document.createElement('p');
+      title.className = 'share-title'; title.textContent = share.label || 'Vehicle link'; meta.className = 'muted';
+      if (url) { title.href = url; title.target = '_blank'; title.rel = 'noopener noreferrer'; title.title = 'Open sharing link in a new tab'; }
       meta.textContent = `${Date.now() >= share.expires_at ? 'Expired' : 'Ends'} ${new Date(share.expires_at).toLocaleString()} · ${vehicleNames.get(share.car_id) || 'Vehicle name unavailable'}`;
       const count = document.createElement('p'); count.className = 'viewer-count'; count.dataset.shareId = share.id;
       count.title = 'Connected viewing tabs; multiple tabs count separately';
@@ -37,13 +71,19 @@ async function refresh() {
           copy.disabled = true;
           try {
             const result = await api(`shares/${share.id}/link`);
-            displayedShareId = share.id;
-            $('created').hidden = false; $('url').value = result.url; $('open').href = result.url;
+            shareUrls.set(share.id, result.url);
+            displayLink(share.id, result.url);
             await copyLink(result.url);
           } catch (error) { $('message').textContent = error.message; }
           finally { copy.disabled = false; }
         };
         actions.append(copy);
+        if (url) {
+          const shareButton = document.createElement('button'); shareButton.className = 'secondary icon-button';
+          shareButton.type = 'button'; shareButton.setAttribute('aria-label', 'Share link'); shareButton.title = 'Share link'; shareButton.innerHTML = shareIcon;
+          shareButton.onclick = () => shareLink(url, share.id);
+          actions.append(shareButton);
+        }
       } else if (!share.recoverable && Date.now() < share.expires_at) {
         const hint = document.createElement('p'); hint.className = 'muted'; hint.textContent = 'Older link: create a new link if the original is lost.'; detail.append(hint);
       }
@@ -54,12 +94,13 @@ async function refresh() {
 }
 $('share-form').onsubmit = async event => {
   event.preventDefault(); $('create').disabled = true;
-  try { const share = await api('shares', { method: 'POST', body: JSON.stringify({ carId: $('car').value, label: $('label').value, hours: Number($('hours').value) }) }); displayedShareId = share.id; $('created').hidden = false; $('url').value = share.url; $('open').href = share.url; $('message').textContent = 'Sharing link created.'; $('label').value = ''; await refresh(); }
+  try { const share = await api('shares', { method: 'POST', body: JSON.stringify({ carId: $('car').value, label: $('label').value, hours: Number($('hours').value) }) }); shareUrls.set(share.id, share.url); displayLink(share.id, share.url); $('message').textContent = 'Sharing link created.'; $('label').value = ''; await refresh(); }
   catch (error) { $('message').textContent = error.message; }
   finally { $('create').disabled = !$('car').options.length; }
 };
 async function copyLink(url) { try { await navigator.clipboard.writeText(url); $('message').textContent = 'Link copied.'; } catch { $('url').focus(); $('url').select(); $('message').textContent = 'Select and copy the link above.'; } }
 $('copy').onclick = () => copyLink($('url').value);
+$('share').onclick = () => shareLink($('url').value, displayedShareId);
 let viewerCounts = {}, countsConnected = false;
 function setViewerCount(element, id) {
   const count = viewerCounts[id] || 0;
@@ -70,6 +111,7 @@ viewerEvents.addEventListener('viewers', event => {
   viewerCounts = JSON.parse(event.data); countsConnected = true;
   document.querySelectorAll('.viewer-count').forEach(element => setViewerCount(element, element.dataset.shareId));
 });
+viewerEvents.addEventListener('connection', event => showMqttConnection(JSON.parse(event.data)));
 viewerEvents.onerror = () => {
   countsConnected = false;
   document.querySelectorAll('.viewer-count').forEach(element => setViewerCount(element, element.dataset.shareId));
@@ -112,12 +154,15 @@ $('sharing-settings-form').onsubmit = async event => {
     const settings = await api('sharing-settings', { method: 'PUT', body: JSON.stringify({ publicOrigin: $('public-origin').value }) });
     $('public-origin').value = settings.publicOrigin;
     $('sharing-settings-message').textContent = 'Sharing URL saved.';
+    shareUrls.clear();
     displayedShareId = null; $('created').hidden = true; $('url').value = ''; $('open').removeAttribute('href'); $('message').textContent = '';
+    await refresh();
   } catch (error) { $('sharing-settings-message').textContent = error.message; }
   finally { $('save-sharing-settings').disabled = false; }
 };
 $('sharing-tab').onclick = () => selectPanel(false);
 $('connection-tab').onclick = () => selectPanel(true);
+$('mqtt-alert-settings').onclick = () => selectPanel(true);
 function detectTransport() {
   const protocol = $('mqtt-url').value.trim().match(/^([a-z]+):\/\//i)?.[1].toLowerCase();
   if (['ws', 'wss', 'http', 'https'].includes(protocol)) $('transport').value = 'websocket';

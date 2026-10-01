@@ -79,6 +79,7 @@ export function createApp({ telemetry, store, config, verifyAdmin, connection })
   app.get('/assets/map-follow.js', (req, res) => res.sendFile(`${publicDir}map-follow.js`));
   app.get('/assets/viewer.js', (req, res) => res.sendFile(`${publicDir}viewer.js`));
   app.get('/favicon.svg', (req, res) => res.sendFile(`${publicDir}favicon.svg`));
+  app.get('/apple-touch-icon.png', (req, res) => res.sendFile(`${publicDir}apple-touch-icon.png`));
   app.use('/assets/leaflet', express.static(fileURLToPath(new URL('../node_modules/leaflet/dist/', import.meta.url))));
   app.get('/s/:token', (req, res) => res.sendFile(`${publicDir}viewer.html`));
   app.get('/', (req, res) => res.sendFile(`${publicDir}index.html`));

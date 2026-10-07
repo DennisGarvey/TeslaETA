@@ -72,6 +72,12 @@ export function createVectorMap(container) {
   map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
   map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
   let priorDark = dark();
+  document.addEventListener('teslaeta:theme-before-change', event => {
+    if (event.detail.dark !== priorDark) {
+      priorDark = event.detail.dark;
+      setStyle(priorDark ? 'dark' : 'light');
+    }
+  });
   const observer = new MutationObserver(() => {
     const nextDark = dark();
     if (nextDark !== priorDark) { priorDark = nextDark; setStyle(nextDark ? 'dark' : 'light'); }

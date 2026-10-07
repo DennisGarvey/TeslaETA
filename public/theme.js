@@ -6,9 +6,12 @@ try {
   if (saved === 'light' || saved === 'dark') theme = saved;
 } catch { /* Storage may be unavailable; Auto still works. */ }
 
-function applyTheme() {
+function applyTheme(mapFirst = false) {
   const root = document.documentElement;
   const nextDark = theme === 'dark' || (theme === 'auto' && systemDark.matches);
+  if (mapFirst && root.classList.contains('theme-dark') !== nextDark) {
+    document.dispatchEvent(new CustomEvent('teslaeta:theme-before-change', { detail: { dark: nextDark } }));
+  }
   root.classList.toggle('theme-dark', nextDark);
   document.querySelectorAll('.theme-switch button').forEach(button => {
     button.setAttribute('aria-pressed', String(button.dataset.theme === theme));
@@ -24,7 +27,7 @@ document.addEventListener('DOMContentLoaded', () => {
     button.addEventListener('click', () => {
       theme = button.dataset.theme;
       try { localStorage.setItem(themeKey, theme); } catch { /* Keep the choice for this page. */ }
-      applyTheme();
+      applyTheme(true);
     });
   });
 });

@@ -1,8 +1,6 @@
 const themeKey = 'teslaEtaAppearance';
 const systemDark = window.matchMedia('(prefers-color-scheme: dark)');
 let theme = 'auto';
-let applied = false;
-let transitionTimer;
 try {
   const saved = localStorage.getItem(themeKey);
   if (saved === 'light' || saved === 'dark') theme = saved;
@@ -11,13 +9,7 @@ try {
 function applyTheme() {
   const root = document.documentElement;
   const nextDark = theme === 'dark' || (theme === 'auto' && systemDark.matches);
-  if (applied && root.classList.contains('theme-dark') !== nextDark) {
-    root.classList.add('theme-switching');
-    clearTimeout(transitionTimer);
-    transitionTimer = setTimeout(() => root.classList.remove('theme-switching'), 350);
-  }
   root.classList.toggle('theme-dark', nextDark);
-  applied = true;
   document.querySelectorAll('.theme-switch button').forEach(button => {
     button.setAttribute('aria-pressed', String(button.dataset.theme === theme));
   });
@@ -27,6 +19,7 @@ applyTheme();
 systemDark.addEventListener('change', () => { if (theme === 'auto') applyTheme(); });
 document.addEventListener('DOMContentLoaded', () => {
   applyTheme();
+  document.documentElement.classList.add('theme-animated');
   document.querySelectorAll('.theme-switch button').forEach(button => {
     button.addEventListener('click', () => {
       theme = button.dataset.theme;

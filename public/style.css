@@ -180,3 +180,7 @@ a.share-title:hover{text-decoration-color:currentColor}
 .theme-dark .mqtt-status.connecting{color:#e3bb5b}
 .theme-dark .mqtt-status.disconnected{color:#ef8a82}
 .theme-dark .saved-hint{color:#a7a7aa}
+.theme-switching,.theme-switching *{transition:color 300ms linear,background-color 300ms linear,border-color 300ms linear}
+@media(prefers-reduced-motion:reduce){.theme-switching,.theme-switching *{transition:none!important}}
+.map-theme-snapshot{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;opacity:1;transition:opacity 300ms linear}
+.maplibregl-marker{z-index:2}

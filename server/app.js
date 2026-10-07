@@ -13,7 +13,7 @@ export function createApp({ telemetry, store, config, verifyAdmin, connection })
   app.disable('x-powered-by');
   app.use((req, res, next) => {
     res.set({ 'Cache-Control': 'no-store', 'Referrer-Policy': 'strict-origin', 'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY',
-      'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'", 'Permissions-Policy': 'geolocation=(), camera=(), microphone=()' });
+      'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org https://vector.openstreetmap.org; connect-src 'self' https://vector.openstreetmap.org; font-src 'self' data: https://vector.openstreetmap.org; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'", 'Permissions-Policy': 'geolocation=(), camera=(), microphone=()' });
     next();
   });
   app.use(express.json({ limit: '24kb' }));
@@ -77,10 +77,12 @@ export function createApp({ telemetry, store, config, verifyAdmin, connection })
   app.get('/assets/style.css', (req, res) => res.sendFile(`${publicDir}style.css`));
   app.get('/assets/theme.js', (req, res) => res.sendFile(`${publicDir}theme.js`));
   app.get('/assets/map-follow.js', (req, res) => res.sendFile(`${publicDir}map-follow.js`));
+  app.get('/assets/vector-map.js', (req, res) => res.sendFile(`${publicDir}vector-map.js`));
   app.get('/assets/viewer.js', (req, res) => res.sendFile(`${publicDir}viewer.js`));
   app.get('/favicon.svg', (req, res) => res.sendFile(`${publicDir}favicon.svg`));
   app.get('/apple-touch-icon.png', (req, res) => res.sendFile(`${publicDir}apple-touch-icon.png`));
   app.use('/assets/leaflet', express.static(fileURLToPath(new URL('../node_modules/leaflet/dist/', import.meta.url))));
+  app.use('/assets/maplibre', express.static(fileURLToPath(new URL('../node_modules/maplibre-gl/dist/', import.meta.url))));
   app.get('/s/:token', (req, res) => res.sendFile(`${publicDir}viewer.html`));
   app.get('/', (req, res) => res.sendFile(`${publicDir}index.html`));
   app.use((req, res) => res.status(404).json({ error: 'Not found' }));

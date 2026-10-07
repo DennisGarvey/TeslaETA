@@ -1,5 +1,7 @@
 import { followFleetLocations, safeFitPadding } from '/assets/map-follow.js';
+import { createVectorMap, vectorMarker, vectorMapEnabled } from '/assets/vector-map.js';
 const $ = id => document.getElementById(id);
+const vector = vectorMapEnabled();
 let displayedShareId = null;
 const shareUrls = new Map();
 const fleetMarkers = new Map();
@@ -84,7 +86,7 @@ function updateFleetMarkers() {
     const icon = car.id === fleetTracking.selected() ? fleetArrow(car.heading) : fleetNumber(index + 1);
     let marker = fleetMarkers.get(car.id);
     if (!marker) {
-      marker = L.marker(position, { icon, title: car.name || `Tesla ${car.id}` }).addTo(fleetMap);
+      marker = vector ? vectorMarker(position, { icon, title: car.name || `Tesla ${car.id}` }, fleetMap) : L.marker(position, { icon, title: car.name || `Tesla ${car.id}` }).addTo(fleetMap);
       marker.on('click', () => fleetTracking.select(car.id));
       fleetMarkers.set(car.id, marker);
     } else {
@@ -100,13 +102,15 @@ function updateFleetMarkers() {
 }
 function initFleetMap() {
   if (fleetMap) { fleetMap.invalidateSize(); updateFleetMarkers(); return; }
-  fleetMap = L.map('fleet-map', { zoomControl: false }).setView([39, -98], 4);
-  L.control.zoom({ position: 'topright' }).addTo(fleetMap);
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors', maxZoom: 19 }).addTo(fleetMap);
+  fleetMap = vector ? createVectorMap('fleet-map') : L.map('fleet-map', { zoomControl: false }).setView([39, -98], 4);
+  if (!vector) {
+    L.control.zoom({ position: 'topright' }).addTo(fleetMap);
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors', maxZoom: 19 }).addTo(fleetMap);
+  }
   fleetTracking = followFleetLocations(fleetMap,
     () => [...fleetMarkers.values()].map(marker => { const p = marker.getLatLng(); return [p.lat, p.lng]; }),
     id => { const p = fleetMarkers.get(id)?.getLatLng(); return p && [p.lat, p.lng]; },
-    points => fleetMap.fitBounds(L.latLngBounds(points), { ...safeFitPadding(fleetMap.getSize()), maxZoom: points.length > 1 ? 19 : 15, animate: false }),
+    points => fleetMap.fitBounds(vector ? points : L.latLngBounds(points), { ...safeFitPadding(fleetMap.getSize()), maxZoom: points.length > 1 ? 19 : 15, animate: false }),
     (point, force) => {
       if (force || fleetMap.getZoom() !== 15) fleetMap.setView(point, 15, { animate: false });
       else fleetMap.panTo(point, { animate: false });

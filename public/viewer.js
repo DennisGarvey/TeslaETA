@@ -1,14 +1,18 @@
 import { followLocations, safeFitPadding } from '/assets/map-follow.js';
+import { createVectorMap, vectorMarker, vectorMapEnabled } from '/assets/vector-map.js';
 const $ = id => document.getElementById(id);
-const map = L.map('map', { zoomControl: false }).setView([39, -98], 4);
-L.control.zoom({ position: 'topright' }).addTo(map);
-L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors', maxZoom: 19 }).addTo(map);
+const vector = vectorMapEnabled();
+const map = vector ? createVectorMap('map') : L.map('map', { zoomControl: false }).setView([39, -98], 4);
+if (!vector) {
+  L.control.zoom({ position: 'topright' }).addTo(map);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors', maxZoom: 19 }).addTo(map);
+}
 let carMarker, destinationMarker, latest;
 const arrow = heading => L.divIcon({ className: 'vehicle-marker', iconSize: [46, 46], iconAnchor: [23, 23], html: `<svg width="46" height="46" viewBox="0 0 46 46" style="transform:rotate(${Number(heading) || 0}deg)"><path d="M23 3L40 41L23 32L6 41Z" fill="#e82127" stroke="white" stroke-width="3" stroke-linejoin="round"/></svg>` });
 const destinationIcon = L.divIcon({ className: 'destination-marker', iconSize: [34, 44], iconAnchor: [17, 42], html: '<svg width="34" height="44" viewBox="0 0 34 44" aria-hidden="true"><path d="M17 42C14 36 3 26 3 17a14 14 0 1 1 28 0c0 9-11 19-14 25Z" fill="#22262b" stroke="white" stroke-width="2"/><circle cx="17" cy="17" r="5" fill="white"/></svg>' });
 const tracking = followLocations(map,
   () => [carMarker, destinationMarker].filter(Boolean).map(marker => { const p = marker.getLatLng(); return [p.lat, p.lng]; }),
-  points => map.fitBounds(L.latLngBounds(points), { ...safeFitPadding(map.getSize()), maxZoom: points.length > 1 ? 19 : 15, animate: false }), $('fit'));
+  points => map.fitBounds(vector ? points : L.latLngBounds(points), { ...safeFitPadding(map.getSize()), maxZoom: points.length > 1 ? 19 : 15, animate: false }), $('fit'));
 $('units').onchange = () => latest && render(latest);
 const number = n => n == null ? '—' : Math.round(n).toString();
 function renderTime() {
@@ -32,9 +36,9 @@ function render(data) {
   $('traffic').textContent = data.routeFresh && data.route?.traffic != null ? `${number(data.route.traffic)} min` : '—';
   $('freshness').textContent = data.locationLiveAt ? `Location received ${new Date(data.locationLiveAt).toLocaleTimeString()}` : data.location ? 'Retained location · original update time unknown' : 'Waiting for location';
   $('expiry').textContent = `Sharing ends ${new Date(data.expiresAt).toLocaleString()}`;
-  if (data.location) { const point = [data.location.latitude, data.location.longitude]; if (!carMarker) carMarker = L.marker(point, { icon: arrow(data.heading), title: 'Vehicle' }).addTo(map); else carMarker.setLatLng(point).setIcon(arrow(data.heading)); }
+  if (data.location) { const point = [data.location.latitude, data.location.longitude]; if (!carMarker) carMarker = vector ? vectorMarker(point, { icon: arrow(data.heading), title: 'Vehicle' }, map) : L.marker(point, { icon: arrow(data.heading), title: 'Vehicle' }).addTo(map); else carMarker.setLatLng(point).setIcon(arrow(data.heading)); }
   else if (carMarker) { map.removeLayer(carMarker); carMarker = null; }
-  if (data.route?.location) { const point = [data.route.location.latitude, data.route.location.longitude]; if (!destinationMarker) destinationMarker = L.marker(point, { icon: destinationIcon, title: 'Navigation destination' }).addTo(map); else destinationMarker.setLatLng(point); }
+  if (data.route?.location) { const point = [data.route.location.latitude, data.route.location.longitude]; if (!destinationMarker) destinationMarker = vector ? vectorMarker(point, { icon: destinationIcon, title: 'Navigation destination' }, map) : L.marker(point, { icon: destinationIcon, title: 'Navigation destination' }).addTo(map); else destinationMarker.setLatLng(point); }
   else if (destinationMarker) { map.removeLayer(destinationMarker); destinationMarker = null; }
   tracking.update();
 }

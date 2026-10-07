@@ -65,6 +65,8 @@ Open **`/admin` → MQTT connection** and enter the broker URL:
 
 On **Sharing**, choose a vehicle and an expiry, then create a link. Treat the link as a secret: anyone with it can view that vehicle until it expires or is revoked. It continues to follow later destinations. The sharing address defaults to `PUBLIC_ORIGIN`; change it under **Settings** if recipients use another hostname that routes to the same app.
 
+Maps use OpenStreetMap vector tiles. Add `?map=raster` to a viewer or admin URL to use the original tile map in browsers where the vector map cannot render.
+
 ## Environment options
 
 - `PUBLIC_ORIGIN` — required HTTPS origin for the app and admin requests; initial sharing-link origin.

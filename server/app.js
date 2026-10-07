@@ -83,6 +83,37 @@ export function createApp({ telemetry, store, config, verifyAdmin, connection })
   app.get('/apple-touch-icon.png', (req, res) => res.sendFile(`${publicDir}apple-touch-icon.png`));
   app.use('/assets/leaflet', express.static(fileURLToPath(new URL('../node_modules/leaflet/dist/', import.meta.url))));
   app.use('/assets/maplibre', express.static(fileURLToPath(new URL('../node_modules/maplibre-gl/dist/', import.meta.url))));
+  app.use('/assets/map-styles', express.static(`${publicDir}map-styles`));
+  app.use('/assets/map-sprites', express.static(`${publicDir}map-sprites`));
+  const fontCache = new Map();
+  app.get('/assets/map-fonts/:font/:range', async (req, res) => {
+    const { font, range } = req.params;
+    const match = /^(\d+)-(\d+)\.pbf$/.exec(range);
+    if (!['noto_sans_regular', 'noto_sans_bold'].includes(font) || !match) return res.sendStatus(404);
+    const start = Number(match[1]), end = Number(match[2]);
+    if (start % 256 || end !== start + 255 || end > 1114111) return res.sendStatus(404);
+    const key = `${font}/${range}`;
+    let entry = fontCache.get(key);
+    if (!entry || entry.expiresAt < Date.now()) {
+      if (fontCache.size >= 64) fontCache.delete(fontCache.keys().next().value);
+      const promise = fetch(`https://vector.openstreetmap.org/styles/shortbread/fonts/${key}`, {
+        headers: { 'User-Agent': 'TeslaETA/1.0 (+https://github.com/DennisGarvey/TeslaETA)' },
+        signal: AbortSignal.timeout(15000)
+      }).then(async response => {
+        if (!response.ok) throw new Error('Map font unavailable');
+        const data = Buffer.from(await response.arrayBuffer());
+        if (data.length > 2_000_000) throw new Error('Map font too large');
+        return data;
+      });
+      entry = { promise, expiresAt: Date.now() + 300_000 };
+      fontCache.set(key, entry);
+      promise.catch(() => { if (fontCache.get(key) === entry) fontCache.delete(key); });
+    }
+    try {
+      const data = await entry.promise;
+      res.set({ 'Content-Type': 'application/x-protobuf', 'Cache-Control': 'public, max-age=300' }).send(data);
+    } catch { res.sendStatus(502); }
+  });
   app.get('/s/:token', (req, res) => res.sendFile(`${publicDir}viewer.html`));
   app.get('/', (req, res) => res.sendFile(`${publicDir}index.html`));
   app.use((req, res) => res.status(404).json({ error: 'Not found' }));

@@ -1,9 +1,14 @@
 const maplibregl = window.maplibregl;
 
-const lightStyle = 'https://vector.openstreetmap.org/styles/shortbread/colorful.json';
+const lightStyle = '/assets/map-styles/colorful.json';
 const darkPalette = new URLSearchParams(location.search).get('dark') === 'eclipse' ? 'eclipse' : 'shadow';
-const darkStyle = `https://vector.openstreetmap.org/styles/shortbread/${darkPalette}.json`;
+const darkStyle = `/assets/map-styles/${darkPalette}.json`;
 const latLng = point => [point[1], point[0]];
+const absoluteStyleAssets = (_, style) => ({
+  ...style,
+  glyphs: `${location.origin}${style.glyphs}`,
+  sprite: style.sprite.map(sprite => ({ ...sprite, url: `${location.origin}${sprite.url}` }))
+});
 
 export function vectorMapEnabled() {
   return new URLSearchParams(location.search).get('map') !== 'raster';
@@ -12,16 +17,18 @@ export function vectorMapEnabled() {
 export function createVectorMap(container) {
   const dark = () => document.documentElement.classList.contains('theme-dark');
   const map = new maplibregl.Map({
-    container, style: dark() ? darkStyle : lightStyle,
+    container, style: { version: 8, sources: {}, layers: [] },
     center: [-98, 39], zoom: 4, maxZoom: 19,
     attributionControl: false
   });
+  const setStyle = url => map.setStyle(url, { transformStyle: absoluteStyleAssets });
+  setStyle(dark() ? darkStyle : lightStyle);
   map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
   map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
   let priorDark = dark();
   const observer = new MutationObserver(() => {
     const nextDark = dark();
-    if (nextDark !== priorDark) { priorDark = nextDark; map.setStyle(nextDark ? darkStyle : lightStyle); }
+    if (nextDark !== priorDark) { priorDark = nextDark; setStyle(nextDark ? darkStyle : lightStyle); }
   });
   observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
 

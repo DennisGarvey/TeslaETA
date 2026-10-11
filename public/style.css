@@ -187,3 +187,12 @@ a.share-title:hover{text-decoration-color:currentColor}
 .trip{color:#182326}
 .theme-dark .trip{color:#ededee}
 .theme-animated .trip,.theme-animated .trip *{transition:background-color 300ms linear,border-color 300ms linear}
+.home-page{min-height:100dvh;display:flex;flex-direction:column}
+.home-page>.admin{width:100%;flex:1}
+.home-footer{padding:18px 24px;border-top:1px solid #e2e7e9}
+.home-footer>div{max-width:1072px;margin:0 auto}
+.home-footer a{display:inline-flex;align-items:center;gap:8px;color:#647478;font-size:13px;text-decoration:none}
+.home-footer a:hover{text-decoration:underline;text-underline-offset:3px}
+.home-footer svg{width:18px;height:18px;flex:none;fill:currentColor}
+.theme-dark .home-footer{border-top-color:#3a3a3e}
+.theme-dark .home-footer a{color:#b5b5ba}

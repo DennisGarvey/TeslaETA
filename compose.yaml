@@ -5,9 +5,10 @@ services:
     env_file: .env
     environment:
       DATABASE_PATH: /data/eta.sqlite
-      LOCAL_PREVIEW: 'false'
+      ADMIN_AUTH_MODE: ${ADMIN_AUTH_MODE:-cloudflare}
+      PORT: 3001
     ports:
-      - '127.0.0.1:3000:3000'
+      - '127.0.0.1:3001:3001'
     volumes:
       - eta-data:/data
 volumes:

@@ -5,7 +5,7 @@ RUN npm ci --omit=dev
 COPY server ./server
 COPY public ./public
 RUN mkdir /data && chown node:node /data
-ENV NODE_ENV=production PORT=3000 DATABASE_PATH=/data/eta.sqlite
+ENV NODE_ENV=production PORT=3001 DATABASE_PATH=/data/eta.sqlite
 USER node
-EXPOSE 3000
+EXPOSE 3001
 CMD ["node", "server/index.js"]

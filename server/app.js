@@ -21,11 +21,13 @@ export function createApp({ telemetry, store, config, verifyAdmin, connection })
   app.use('/admin', async (req, res, next) => {
     if (config.localPreview) return next();
     try {
-      if (verifyAdmin) await verifyAdmin(req);
-      else {
-        if (!jwks || !config.accessAudience) throw new Error('Access is not configured');
-        const { payload } = await jwtVerify(req.get('Cf-Access-Jwt-Assertion') || '', jwks, { issuer: config.accessIssuer, audience: config.accessAudience, algorithms: ['RS256'] });
-        req.accessExpiresAt = payload.exp * 1000;
+      if (config.adminAuthMode !== 'external') {
+        if (verifyAdmin) await verifyAdmin(req);
+        else {
+          if (!jwks || !config.accessAudience) throw new Error('Access is not configured');
+          const { payload } = await jwtVerify(req.get('Cf-Access-Jwt-Assertion') || '', jwks, { issuer: config.accessIssuer, audience: config.accessAudience, algorithms: ['RS256'] });
+          req.accessExpiresAt = payload.exp * 1000;
+        }
       }
       if (!['GET', 'HEAD'].includes(req.method) && (req.get('origin') !== config.publicOrigin || req.get('x-requested-with') !== 'TeslaETA')) return res.status(403).json({ error: 'Invalid request origin' });
       next();

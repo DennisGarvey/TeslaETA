@@ -2,34 +2,17 @@
 
 Share a TeslaMate vehicle's location and navigation ETA through time-limited links. The app subscribes to TeslaMate's MQTT topics, serves the admin dashboard and viewer pages, and stores sharing links in SQLite.
 
-## Set up access
+## Admin access
 
-Use an HTTPS hostname for the app. In Cloudflare Access, protect **both `/admin` and `/admin/*`** with a self-hosted application for your administrators; [the wildcard does not cover the parent path](https://developers.cloudflare.com/cloudflare-one/access-controls/policies/app-paths/). Leave `/s/*` accessible to link recipients. Set these environment variables for the app:
+Set `PUBLIC_ORIGIN` to the HTTPS origin used to open the app. Leave `/s/*` accessible to link recipients and protect both `/admin` and `/admin/*`.
 
-```dotenv
-PUBLIC_ORIGIN=https://eta.example.com
-CF_ACCESS_TEAM_DOMAIN=https://your-team.cloudflareaccess.com
-CF_ACCESS_ADMIN_AUD=your-admin-application-audience-tag
-```
+By default, the app verifies Cloudflare Access JWTs. Create a self-hosted Access application for both admin paths; [the wildcard does not cover `/admin` itself](https://developers.cloudflare.com/cloudflare-one/access-controls/policies/app-paths/). Use its Audience (AUD) tag for `CF_ACCESS_ADMIN_AUD` in the Compose example below.
 
-`PUBLIC_ORIGIN` must be the hostname used to open the admin page. Use the Access application's Audience (AUD) tag for `CF_ACCESS_ADMIN_AUD`. The app verifies the Access JWT using the team domain and audience tag; both values are required in production. The origin also supplies the initial address for sharing links. You can change the sharing address later under **Admin → Settings**, provided that address routes to this app.
+If your reverse proxy handles admin authentication, set `ADMIN_AUTH_MODE=external` instead and omit those two Cloudflare settings. The app then trusts the proxy for `/admin` requests, so the app port must not be reachable around it.
 
-## Standalone Docker install
+## Docker Compose
 
-The included [compose.yaml](compose.yaml) pulls the published image, binds it to `127.0.0.1:3000`, and keeps the database in the `eta-data` volume. Download the two setup files into an empty directory:
-
-```sh
-curl -fsSLO https://raw.githubusercontent.com/DennisGarvey/TeslaETA/main/compose.yaml
-curl -fsSL https://raw.githubusercontent.com/DennisGarvey/TeslaETA/main/.env.example -o .env
-# Set the three production values above in .env
-docker compose up -d
-```
-
-Point your reverse proxy or Cloudflare Tunnel at `http://127.0.0.1:3000`. If the tunnel runs in Docker on the same network, target `http://tesla-eta:3000` instead.
-
-## Alongside a TeslaMate Compose stack
-
-Add this service under `services:` in your TeslaMate `docker-compose.yml`, and the volume under the existing top-level `volumes:`:
+Example service configuration:
 
 ```yaml
 services:
@@ -38,11 +21,13 @@ services:
     restart: unless-stopped
     environment:
       PUBLIC_ORIGIN: https://eta.example.com
+      PORT: 3001
+      ADMIN_AUTH_MODE: cloudflare
       CF_ACCESS_TEAM_DOMAIN: https://your-team.cloudflareaccess.com
       CF_ACCESS_ADMIN_AUD: your-admin-application-audience-tag
       DATABASE_PATH: /data/eta.sqlite
     ports:
-      - "127.0.0.1:3001:3000"
+      - "127.0.0.1:3001:3001"
     volumes:
       - eta-data:/data
 
@@ -50,11 +35,9 @@ volumes:
   eta-data:
 ```
 
-Use your own hostname and Access values, then run `docker compose up -d tesla-eta` from the TeslaMate directory. Point the proxy or tunnel at `http://127.0.0.1:3001`; a tunnel container on the same Compose network can use `http://tesla-eta:3000`. In **Admin → MQTT connection**, use `mqtt://mosquitto:1883` if the broker service is named `mosquitto`.
+Replace the example hostname and Access values. The HTTP endpoint is `http://127.0.0.1:3001` on the host or `http://tesla-eta:3001` on the Compose network. If your TeslaMate broker service is named `mosquitto`, enter `mqtt://mosquitto:1883` under **Admin → MQTT connection**.
 
-For either install, update only this service with `docker compose pull tesla-eta && docker compose up -d --no-deps tesla-eta`. Keep one app instance and preserve the `/data` volume during upgrades and backups; it contains `eta.sqlite` and its encryption key. If using Nginx, disable buffering for the viewer and admin event streams.
-
-The [container workflow](.github/workflows/container.yml) publishes `linux/amd64` and `linux/arm64` images to GHCR on pushes to `main`. After its first successful run, the repository owner must set the new package's visibility to **public** in GitHub's package settings so other installations can pull it without signing in.
+Run one app instance and preserve `/data` during upgrades and backups; it contains the SQLite database and its encryption key. If using Nginx, disable buffering for the viewer and admin event streams.
 
 ## Connect TeslaMate
 
@@ -68,18 +51,14 @@ Open **`/admin` → MQTT connection** and enter the broker URL:
 
 On **Sharing**, choose a vehicle and an expiry, then create a link. Treat the link as a secret: anyone with it can view that vehicle until it expires or is revoked. It continues to follow later destinations. The sharing address defaults to `PUBLIC_ORIGIN`; change it under **Settings** if recipients use another hostname that routes to the same app.
 
-Maps use OpenStreetMap vector tiles. Add `?map=raster` to a viewer or admin URL to use the original tile map in browsers where the vector map cannot render.
-
 ## Environment options
 
 - `PUBLIC_ORIGIN` — required HTTPS origin for the app and admin requests; initial sharing-link origin.
-- `CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_ADMIN_AUD` — required production admin authentication settings.
+- `ADMIN_AUTH_MODE` — `cloudflare` (default) verifies Cloudflare Access JWTs; `external` trusts authentication enforced by your proxy on `/admin` and `/admin/*`.
+- `CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_ADMIN_AUD` — required only with `ADMIN_AUTH_MODE=cloudflare`.
 - `MQTT_URL`, `MQTT_USERNAME`, `MQTT_PASSWORD` — optional starting broker settings. Dashboard settings override them once saved.
 - `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET` — optional MQTT WebSocket service token used with `MQTT_URL`.
 - `DATABASE_PATH` — SQLite file location. Docker sets `/data/eta.sqlite`.
-- `PORT` — HTTP port, default `3000`.
-- `LOCAL_PREVIEW` — set to `true` only for local development. It binds to loopback and skips admin authentication.
-
-For local development, copy `.env.example` to `.env`, set `PUBLIC_ORIGIN=http://127.0.0.1:3000`, then run `npm ci` and `npm run dev`. Node.js 22.13 or later is required. Run the test suite with `npm test`.
+- `PORT` — HTTP port, default `3001`.
 
 [TeslaMate MQTT topics](https://docs.teslamate.org/docs/integrations/mqtt/) · [Cloudflare Access service tokens](https://developers.cloudflare.com/cloudflare-one/access-controls/service-credentials/service-tokens/)

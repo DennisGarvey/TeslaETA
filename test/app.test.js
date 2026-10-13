@@ -62,6 +62,21 @@ test('admin mutations reject cross-origin requests, then allow create and revoke
   } finally { await new Promise(resolve => server.close(resolve)); store.db.close(); }
 });
 
+test('external admin authentication trusts the proxy while retaining origin checks', async () => {
+  const telemetry = new Telemetry(), store = new Store(':memory:');
+  telemetry.ingest('teslamate/cars/1/display_name', Buffer.from('Car'));
+  const app = createApp({ telemetry, store, config: { adminAuthMode: 'external', publicOrigin: 'https://eta.example.com' } });
+  const server = app.listen(0, '127.0.0.1'); await new Promise(resolve => server.once('listening', resolve));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  try {
+    assert.equal((await fetch(base + '/admin')).status, 200);
+    const body = JSON.stringify({ carId: '1', hours: 1 });
+    assert.equal((await fetch(base + '/admin/api/shares', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body })).status, 403);
+    const headers = { 'Content-Type': 'application/json', origin: 'https://eta.example.com', 'X-Requested-With': 'TeslaETA' };
+    assert.equal((await fetch(base + '/admin/api/shares', { method: 'POST', headers, body })).status, 201);
+  } finally { await new Promise(resolve => server.close(resolve)); store.db.close(); }
+});
+
 import { enforceReadOnly } from '../server/read-only.js';
 test('read-only client rejects publish, async publish, and last wills', async () => {
   const client = enforceReadOnly({ options: {} });

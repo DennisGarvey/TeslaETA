@@ -11,7 +11,7 @@
   <title>Tesla ETA — ETA sharing for TeslaMate</title>
   <link rel="icon" type="image/svg+xml" href="./favicon.svg">
   <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png">
-  <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="./style.css?v=2">
   <script src="./preview.js" defer></script>
 </head>
 <body>
@@ -36,7 +36,7 @@
         <h1 id="hero-title">Share your<br>Tesla’s <span>ETA.</span></h1>
         <p class="hero-description">Send a time-limited link showing your vehicle’s location, navigation destination, arrival time, and speed. Tesla ETA uses the MQTT data TeslaMate already publishes.</p>
         <div class="hero-actions">
-          <a class="button button-primary" href="https://github.com/DennisGarvey/TeslaETA#standalone-docker-install" target="_blank" rel="noopener noreferrer">Setup guide</a>
+          <a class="button button-primary" href="https://github.com/DennisGarvey/TeslaETA#docker-compose" target="_blank" rel="noopener noreferrer">Setup guide</a>
           <a class="text-link" href="#features">Explore features</a>
         </div>
       </div>
@@ -106,8 +106,7 @@
 
     <section class="features container" id="features" aria-labelledby="features-title">
       <div class="section-heading">
-        <p class="section-index">FEATURES</p>
-        <h2 id="features-title">What a viewer sees.</h2>
+        <h2 id="features-title">Features</h2>
       </div>
       <div class="feature-list">
         <article class="feature-row">
@@ -135,14 +134,11 @@
 
     <section class="deploy-section container" id="deploy" aria-labelledby="deploy-title">
       <div>
-        <p class="section-index">DEPLOYMENT</p>
         <h2 id="deploy-title">Deploy with Docker Compose.</h2>
       </div>
       <div class="deploy-copy">
-        <p>Add the container to your TeslaMate Compose stack, or run it on its own. Configure the broker and create links from the admin page.</p>
-        <div class="terminal" aria-label="Docker Compose update command"><span class="terminal-prompt">$</span><code>docker compose up -d --build tesla-eta</code></div>
-        <p class="terminal-note">Command shown for an existing TeslaMate Compose stack.</p>
-        <a class="button button-dark" href="https://github.com/DennisGarvey/TeslaETA#alongside-a-teslamate-compose-stack" target="_blank" rel="noopener noreferrer">Read the setup guide</a>
+        <p>The Docker image is published on GitHub Container Registry. Use the same Compose service on its own or add it to your TeslaMate stack.</p>
+        <a class="button button-dark" href="https://github.com/DennisGarvey/TeslaETA#docker-compose" target="_blank" rel="noopener noreferrer">Setup guide</a>
       </div>
     </section>
   </main>

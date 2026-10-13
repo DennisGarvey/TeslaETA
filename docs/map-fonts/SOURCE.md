@@ -1,0 +1,1 @@
+The static map preview bundles the `0-255` and `256-511` glyph ranges for `noto_sans_regular` and `noto_sans_bold` from `https://vector.openstreetmap.org/styles/shortbread/fonts/`. The preview is limited to New York City; it does not need other glyph ranges. Noto Sans is covered by [OFL.txt](OFL.txt).

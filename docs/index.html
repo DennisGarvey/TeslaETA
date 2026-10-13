@@ -11,8 +11,10 @@
   <title>Tesla ETA — ETA sharing for TeslaMate</title>
   <link rel="icon" type="image/svg+xml" href="./favicon.svg">
   <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png">
-  <link rel="stylesheet" href="./style.css?v=2">
-  <script src="./preview.js" defer></script>
+  <link rel="stylesheet" href="./vendor/maplibre-gl.css">
+  <link rel="stylesheet" href="./style.css?v=3">
+  <script src="./vendor/maplibre-gl.js" defer></script>
+  <script src="./preview.js?v=6" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
@@ -72,7 +74,8 @@
                 <div><span>Traffic delay</span><strong>2 min</strong></div>
               </div>
             </div>
-            <div class="map-preview" aria-hidden="true">
+            <div class="map-preview">
+              <div class="map-fallback" aria-hidden="true">
               <svg class="street-map" viewBox="0 0 640 590" preserveAspectRatio="xMidYMid slice">
                 <rect width="640" height="590" fill="#e6e5df"/>
                 <g fill="#ddddd6">
@@ -97,10 +100,13 @@
               <div class="destination-point"><svg viewBox="0 0 38 48"><path d="M19 46C15 39 3 27 3 18a16 16 0 1 1 32 0c0 9-12 21-16 28Z"/><circle cx="19" cy="18" r="5"/></svg></div>
               <div class="vehicle-point"><svg viewBox="0 0 48 48"><path d="M24 3 43 44 24 35 5 44Z"/></svg></div>
               <span class="map-attribution">Map illustration</span>
+              </div>
+              <div id="preview-map" class="preview-map" role="region" aria-label="Interactive map showing a sample vehicle and destination in New York City"></div>
+              <button id="preview-recenter" class="preview-recenter" type="button" hidden>Recenter</button>
             </div>
           </div>
         </div>
-        <figcaption>Illustrative trip view</figcaption>
+        <figcaption>Sample trip</figcaption>
       </figure>
     </section>
 

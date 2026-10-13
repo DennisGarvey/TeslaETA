@@ -72,6 +72,14 @@ h1 span { color: var(--red); }
 .preview-secondary span { color: #6c7470; }
 .preview-secondary strong { font-size: 12px; font-weight: 700; }
 .map-preview { position: relative; min-width: 0; overflow: hidden; background: #e6e5df; }
+.map-fallback, .preview-map { position: absolute; inset: 0; }
+.preview-map { opacity: 0; pointer-events: none; }
+.map-preview.map-ready .map-fallback { visibility: hidden; }
+.map-preview.map-ready .preview-map { opacity: 1; pointer-events: auto; }
+.preview-map .maplibregl-ctrl-attrib { font-size: 9px; }
+.preview-recenter { position: absolute; z-index: 2; bottom: 21px; left: 15px; padding: 7px 10px; border: 1px solid #d0d3d0; border-radius: 4px; background: #fff; color: #22262b; box-shadow: 0 2px 7px #0002; font: inherit; font-size: 11px; font-weight: 650; cursor: pointer; }
+.preview-recenter:hover { background: #f1f2f0; }
+.preview-recenter[hidden] { display: none; }
 .street-map { position: absolute; width: 100%; height: 100%; inset: 0; }
 .map-control { position: absolute; top: 16px; right: 16px; display: grid; width: 29px; background: #fff; border: 1px solid #d0d3d0; box-shadow: 0 2px 7px #0002; color: #333; font-size: 18px; text-align: center; }
 .map-control span { height: 28px; line-height: 27px; }
@@ -98,6 +106,8 @@ h1 span { color: var(--red); }
 .product-window[data-preview-dark="true"] .map-control { border-color: #535358; background: #2c2c2f; color: #ededee; }
 .product-window[data-preview-dark="true"] .map-control span + span { border-color: #535358; }
 .product-window[data-preview-dark="true"] .map-attribution { background: #1c1c1ee8; color: #bdbdc1; }
+.product-window[data-preview-dark="true"] .preview-recenter { border-color: #535358; background: #2c2c2f; color: #ededee; }
+.product-window[data-preview-dark="true"] .preview-recenter:hover { background: #3a3a3e; }
 .product-figure figcaption { margin: 12px 3px 0; color: #7d817d; font-size: 10px; text-align: right; }
 
 .features { padding-block: 104px 92px; border-top: 1px solid var(--line); }

@@ -1,6 +1,6 @@
 services:
   tesla-eta:
-    build: .
+    image: ghcr.io/dennisgarvey/teslaeta:latest
     restart: unless-stopped
     env_file: .env
     environment:

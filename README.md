@@ -16,24 +16,25 @@ CF_ACCESS_ADMIN_AUD=your-admin-application-audience-tag
 
 ## Standalone Docker install
 
-The included [compose.yaml](compose.yaml) builds the app, binds it to `127.0.0.1:3000`, and keeps the database in the `eta-data` volume:
+The included [compose.yaml](compose.yaml) pulls the published image, binds it to `127.0.0.1:3000`, and keeps the database in the `eta-data` volume. Download the two setup files into an empty directory:
 
 ```sh
-cp .env.example .env
+curl -fsSLO https://raw.githubusercontent.com/DennisGarvey/TeslaETA/main/compose.yaml
+curl -fsSL https://raw.githubusercontent.com/DennisGarvey/TeslaETA/main/.env.example -o .env
 # Set the three production values above in .env
-docker compose up -d --build
+docker compose up -d
 ```
 
 Point your reverse proxy or Cloudflare Tunnel at `http://127.0.0.1:3000`. If the tunnel runs in Docker on the same network, target `http://tesla-eta:3000` instead.
 
 ## Alongside a TeslaMate Compose stack
 
-Clone this repository as `teslaeta` beside your TeslaMate `docker-compose.yml`. Add this service under `services:` and the volume under the existing top-level `volumes:`:
+Add this service under `services:` in your TeslaMate `docker-compose.yml`, and the volume under the existing top-level `volumes:`:
 
 ```yaml
 services:
   tesla-eta:
-    build: ./teslaeta
+    image: ghcr.io/dennisgarvey/teslaeta:latest
     restart: unless-stopped
     environment:
       PUBLIC_ORIGIN: https://eta.example.com
@@ -49,9 +50,11 @@ volumes:
   eta-data:
 ```
 
-Use your own hostname and Access values, then run `docker compose up -d --build tesla-eta` from the TeslaMate directory. Point the proxy or tunnel at `http://127.0.0.1:3001`; a tunnel container on the same Compose network can use `http://tesla-eta:3000`. In **Admin → MQTT connection**, use `mqtt://mosquitto:1883` if the broker service is named `mosquitto`.
+Use your own hostname and Access values, then run `docker compose up -d tesla-eta` from the TeslaMate directory. Point the proxy or tunnel at `http://127.0.0.1:3001`; a tunnel container on the same Compose network can use `http://tesla-eta:3000`. In **Admin → MQTT connection**, use `mqtt://mosquitto:1883` if the broker service is named `mosquitto`.
 
-For either install, keep one app instance and preserve the `/data` volume during upgrades and backups; it contains `eta.sqlite` and its encryption key. If using Nginx, disable buffering for the viewer and admin event streams.
+For either install, update only this service with `docker compose pull tesla-eta && docker compose up -d --no-deps tesla-eta`. Keep one app instance and preserve the `/data` volume during upgrades and backups; it contains `eta.sqlite` and its encryption key. If using Nginx, disable buffering for the viewer and admin event streams.
+
+The [container workflow](.github/workflows/container.yml) publishes `linux/amd64` and `linux/arm64` images to GHCR on pushes to `main`. After its first successful run, the repository owner must set the new package's visibility to **public** in GitHub's package settings so other installations can pull it without signing in.
 
 ## Connect TeslaMate
 

@@ -1,6 +1,7 @@
 import mqtt from 'mqtt';
 import WebSocket from 'ws';
 import { enforceReadOnly } from './read-only.js';
+import { logger as defaultLogger, errorDetails } from './logger.js';
 export function cleanToken(value, header) {
   if (typeof value !== 'string') throw new Error('Token values must be text.');
   const cleaned = value.trim().replace(new RegExp(`^${header}\\s*:\\s*`, 'i'), '').trim();
@@ -32,7 +33,10 @@ export function normalizeSettings(input, previous = {}) {
   return { transport, url: url.toString(), username, password, cloudflare, clientId, clientSecret };
 }
 export class MqttConnection {
-  constructor(telemetry) { this.telemetry = telemetry; this.settings = null; this.status = 'Not configured'; this.generation = 0; }
+  constructor(telemetry, { logger = defaultLogger, connect = mqtt.connect, now = Date.now } = {}) {
+    this.telemetry = telemetry; this.settings = null; this.status = 'Not configured'; this.generation = 0;
+    this.logger = logger; this.connect = connect; this.now = now;
+  }
   publicSettings() {
     const s = this.settings || {};
     return { transport: s.transport || 'websocket', url: s.url || '', username: s.username || '', cloudflare: !!s.cloudflare,
@@ -45,23 +49,54 @@ export class MqttConnection {
     this.telemetry.connected = false; this.telemetry.cars.clear(); this.telemetry.emit('connection');
     this.status = 'Connecting';
     const current = () => generation === this.generation;
+    let everConnected = false, outageStarted = null, retries = 0;
+    const failures = new Set();
+    const failure = (message, details = {}) => {
+      const first = outageStarted === null;
+      if (first) outageStarted = this.now();
+      const signature = JSON.stringify(details);
+      if (first || (Object.keys(details).length && !failures.has(signature))) {
+        this.logger.warn(message, details);
+        failures.add(signature);
+      }
+    };
     const options = { username: settings.username || undefined, password: settings.password || undefined, reconnectPeriod: 5000, connectTimeout: 15000, clean: true };
     if (settings.transport === 'websocket') options.createWebsocket = url => new WebSocket(url, ['mqtt'], {
       headers: settings.cloudflare ? { 'CF-Access-Client-Id': settings.clientId, 'CF-Access-Client-Secret': settings.clientSecret } : {},
       handshakeTimeout: 15000, maxPayload: 65536
     });
-    const client = enforceReadOnly(mqtt.connect(settings.url, options)); this.client = client;
+    const client = enforceReadOnly(this.connect(settings.url, options)); this.client = client;
     client.on('connect', () => {
       if (!current()) return;
       client.subscribe('teslamate/cars/+/+', { qos: 0 }, (error, granted) => {
         if (!current()) return;
         this.telemetry.connected = !error && !!granted?.length && granted.every(item => item.qos !== 128);
         this.status = this.telemetry.connected ? 'Connected' : 'Subscription rejected';
+        if (!this.telemetry.connected) {
+          failure('MQTT subscription rejected', error ? errorDetails(error) : { reason: 'Broker denied the topic subscription' });
+          return;
+        }
+        if (!everConnected || outageStarted !== null) {
+          this.logger.info(everConnected ? 'MQTT reconnected' : 'MQTT connected', {
+            transport: settings.transport,
+            ...(outageStarted === null ? {} : { outageSeconds: Math.round((this.now() - outageStarted) / 1000), retries })
+          });
+        }
+        everConnected = true; outageStarted = null; retries = 0; failures.clear();
       });
     });
     client.on('message', (topic, payload, packet) => { if (current()) this.telemetry.ingest(topic, payload, packet.retain); });
-    client.on('close', () => { if (current()) { this.telemetry.connected = false; this.status = 'Disconnected · retrying'; } });
-    client.on('error', () => { if (current()) { this.telemetry.connected = false; this.status = 'Connection failed · check URL and credentials'; } });
+    client.on('reconnect', () => { if (current()) ++retries; });
+    client.on('close', () => {
+      if (!current()) return;
+      this.telemetry.connected = false; this.status = 'Disconnected · retrying';
+      failure(everConnected ? 'MQTT connection lost; reconnecting' : 'MQTT connection failed; retrying');
+    });
+    client.on('error', error => {
+      if (!current()) return;
+      this.telemetry.connected = false; this.status = 'Connection failed · check URL and credentials';
+      failure(everConnected ? 'MQTT connection lost; reconnecting' : 'MQTT connection failed; retrying', errorDetails(error));
+    });
   }
   close() { ++this.generation; this.client?.end(true); }
 }

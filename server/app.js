@@ -5,8 +5,9 @@ import { normalizeSettings } from './mqtt.js';
 import { streamShare } from './stream.js';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { fileURLToPath } from 'node:url';
+import { logger as defaultLogger, errorDetails } from './logger.js';
 const publicDir = fileURLToPath(new URL('../public/', import.meta.url));
-export function createApp({ telemetry, store, config, verifyAdmin, connection }) {
+export function createApp({ telemetry, store, config, verifyAdmin, connection, logger = defaultLogger }) {
   const app = express();
   const viewers = new Viewers();
   const sharingOrigin = () => store.sharingOrigin() || config.publicOrigin;
@@ -39,6 +40,7 @@ export function createApp({ telemetry, store, config, verifyAdmin, connection })
     try { origin = normalizeSharingOrigin(req.body?.publicOrigin, config.localPreview); }
     catch (error) { return res.status(400).json({ error: error.message }); }
     store.saveSharingOrigin(origin);
+    logger.info('Sharing URL changed');
     res.json({ publicOrigin: origin });
   });
   app.get('/admin/api/connection', (req, res) => res.json(connection?.publicSettings() || {}));
@@ -48,6 +50,7 @@ export function createApp({ telemetry, store, config, verifyAdmin, connection })
     try { settings = normalizeSettings(req.body, connection.settings || {}); }
     catch (error) { return res.status(400).json({ error: error.message }); }
     store.saveConnection(settings);
+    logger.info('MQTT settings saved');
     connection.apply(settings);
     res.json(connection.publicSettings());
   });
@@ -63,9 +66,14 @@ export function createApp({ telemetry, store, config, verifyAdmin, connection })
     const { carId, label = '', hours } = req.body || {};
     if (typeof carId !== 'string' || !telemetry.cars.has(carId) || typeof label !== 'string' || label.length > 100 || !Number.isFinite(hours) || hours < 1 || hours > 168) return res.status(400).json({ error: 'Choose a vehicle and an expiry between 1 and 168 hours. Link names must be 100 characters or fewer.' });
     const share = store.create(carId, label.trim(), hours);
+    logger.info('Sharing link created', { linkId: share.id });
     res.status(201).json({ ...share, url: `${sharingOrigin()}/s/${share.token}` });
   });
-  app.delete('/admin/api/shares/:id', (req, res) => { store.revoke(req.params.id); res.sendStatus(204); });
+  app.delete('/admin/api/shares/:id', (req, res) => {
+    const share = store.revoke(req.params.id);
+    if (share) logger.info(share.expires_at > Date.now() ? 'Sharing link revoked' : 'Expired sharing link removed', { linkId: share.id });
+    res.sendStatus(204);
+  });
   app.get('/s/:token/events', (req, res) => streamShare(req, res, { telemetry, store, config, viewers }));
   app.get('/s/:token/data', (req, res) => {
     if (!/^[A-Za-z0-9_-]{43}$/.test(req.params.token)) return res.status(404).json({ error: 'This link is unavailable or has expired.' });
@@ -119,6 +127,11 @@ export function createApp({ telemetry, store, config, verifyAdmin, connection })
   app.get('/s/:token', (req, res) => res.sendFile(`${publicDir}viewer.html`));
   app.get('/', (req, res) => res.sendFile(`${publicDir}index.html`));
   app.use((req, res) => res.status(404).json({ error: 'Not found' }));
-  app.use((err, req, res, next) => res.status(err.status === 400 ? 400 : 500).json({ error: 'Unable to complete the request.' }));
+  app.use((err, req, res, next) => {
+    const status = err.status === 400 ? 400 : 500;
+    if (status === 500) logger.error('Request failed', { operation: req.route?.path || 'request', ...errorDetails(err) });
+    if (res.headersSent) return res.destroy();
+    res.status(status).json({ error: 'Unable to complete the request.' });
+  });
   return app;
 }

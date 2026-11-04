@@ -3,13 +3,15 @@ import assert from 'node:assert/strict';
 import { followLocations, followFleetLocations } from '../public/map-follow.js';
 
 class MapStub {
-  constructor() { this.listeners = new Map(); this.fits = []; this.centers = []; }
+  constructor(options) { this.options = options; this.listeners = new Map(); this.fits = []; this.centers = []; this.styles = []; this.paints = []; }
   on(event, callback) {
     const listeners = this.listeners.get(event) || [];
     listeners.push(callback); this.listeners.set(event, listeners);
   }
   emit(event, data = {}) { for (const callback of this.listeners.get(event) || []) callback(data); }
-  setStyle() {}
+  setStyle(style) { this.styles.push(style); this.style = style; }
+  getLayer(id) { return typeof this.style === 'object' ? this.style.layers.find(layer => layer.id === id) : undefined; }
+  setPaintProperty(id, property, value) { this.paints.push({ id, property, value }); }
   addControl() {}
   getContainer() { return { clientWidth: 900, clientHeight: 600 }; }
   fitBounds(bounds) { this.fits.push(bounds.points); this.emit('movestart'); this.emit('zoomstart'); }
@@ -80,4 +82,31 @@ test('vector fleet tracking keeps its selected vehicle centered through window r
   const fits = map.raw.fits.length;
   map.raw.emit('moveend'); map.invalidateSize();
   assert.equal(map.raw.fits.length, fits + 1); assert.equal(button.hidden, true);
+});
+
+test('theme changes use immediate paint updates without rebuilding the map or changing its camera', async t => {
+  const { createVectorMap } = await withVectorMap(t);
+  const observers = [];
+  let dark = false;
+  globalThis.document.documentElement.classList.contains = () => dark;
+  globalThis.MutationObserver = class { constructor(callback) { observers.push(callback); } observe() {} };
+  globalThis.fetch = async url => ({ ok: true, json: async () => ({
+    version: 8, glyphs: '/fonts/{fontstack}/{range}.pbf', sprite: [], sources: {},
+    layers: [{ id: 'background', type: 'background', paint: { 'background-color': url.includes('shadow') ? '#222222' : '#ffffff' } }]
+  }) });
+  const map = createVectorMap('map');
+  await new Promise(resolve => setImmediate(resolve));
+  dark = true; observers[0]();
+  assert.equal(map.raw.options.fadeDuration, 0);
+  assert.equal(map.raw.options.canvasContextAttributes, undefined);
+  assert.deepEqual(map.raw.style.transition, { duration: 0, delay: 0 });
+  const styleChanges = map.raw.styles.length;
+  dark = false; observers[0]();
+  dark = true; observers[0]();
+  assert.equal(map.raw.styles.length, styleChanges);
+  assert.deepEqual(map.raw.paints, [
+    { id: 'background', property: 'background-color', value: '#ffffff' },
+    { id: 'background', property: 'background-color', value: '#222222' }
+  ]);
+  assert.equal(map.raw.fits.length, 0); assert.equal(map.raw.centers.length, 0);
 });

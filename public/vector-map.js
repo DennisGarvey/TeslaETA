@@ -3,11 +3,10 @@ const maplibregl = window.maplibregl;
 const lightStyle = '/assets/map-styles/colorful.json';
 const darkPalette = new URLSearchParams(location.search).get('dark') === 'eclipse' ? 'eclipse' : 'shadow';
 const darkStyle = `/assets/map-styles/${darkPalette}.json`;
-const themeFadeMs = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 300;
 const latLng = point => [point[1], point[0]];
 const absoluteStyleAssets = (_, style) => ({
   ...style,
-  transition: { duration: themeFadeMs, delay: 0 },
+  transition: { duration: 0, delay: 0 },
   glyphs: `${location.origin}${style.glyphs}`,
   sprite: style.sprite.map(sprite => ({ ...sprite, url: `${location.origin}${sprite.url}` }))
 });
@@ -29,34 +28,13 @@ export function createVectorMap(container) {
   const map = new maplibregl.Map({
     container, style: { version: 8, sources: {}, layers: [] },
     center: [-98, 39], zoom: 4, maxZoom: 19,
-    attributionControl: false, fadeDuration: themeFadeMs,
-    canvasContextAttributes: { preserveDrawingBuffer: true }
+    attributionControl: false, fadeDuration: 0
   });
-  let snapshot;
-  const fadePreviousMap = () => {
-    if (!themeFadeMs) return;
-    try {
-      const image = map.getCanvas().toDataURL('image/png');
-      snapshot?.remove();
-      snapshot = document.createElement('img');
-      snapshot.className = 'map-theme-snapshot';
-      snapshot.src = image;
-      snapshot.alt = '';
-      snapshot.setAttribute('aria-hidden', 'true');
-      map.getCanvasContainer().append(snapshot);
-      // Establish the initial opacity before starting the CSS fade.
-      getComputedStyle(snapshot).opacity;
-      snapshot.style.opacity = '0';
-      const fading = snapshot;
-      setTimeout(() => { fading.remove(); if (snapshot === fading) snapshot = null; }, themeFadeMs + 50);
-    } catch { snapshot?.remove(); snapshot = null; }
-  };
   let currentStyleName = dark() ? 'dark' : 'light';
   const setStyle = name => {
     const current = styleCache.get(currentStyleName);
     const next = styleCache.get(name);
     if (current && next && next.layers.every((layer, index) => layer.id === current.layers[index]?.id && map.getLayer(layer.id))) {
-      fadePreviousMap();
       next.layers.forEach((layer, index) => {
         for (const [property, value] of Object.entries(layer.paint || {})) {
           if (JSON.stringify(value) !== JSON.stringify(current.layers[index].paint?.[property])) {
@@ -72,12 +50,6 @@ export function createVectorMap(container) {
   map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
   map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
   let priorDark = dark();
-  document.addEventListener('teslaeta:theme-before-change', event => {
-    if (event.detail.dark !== priorDark) {
-      priorDark = event.detail.dark;
-      setStyle(priorDark ? 'dark' : 'light');
-    }
-  });
   const observer = new MutationObserver(() => {
     const nextDark = dark();
     if (nextDark !== priorDark) { priorDark = nextDark; setStyle(nextDark ? 'dark' : 'light'); }

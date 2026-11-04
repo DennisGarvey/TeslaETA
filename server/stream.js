@@ -1,7 +1,7 @@
 // Only sanitized snapshots for the link's car are pushed; MQTT stays private.
 export function streamShare(req, res, { telemetry, store, config, viewers }) {
   const token = req.params.token;
-  let pending, heartbeat, leave, closed = false;
+  let pending, heartbeat, leave, drainTimeout, lastRouteLine, closed = false, blocked = false, dirty = false;
   const resolve = () => /^[A-Za-z0-9_-]{43}$/.test(token) ? store.resolve(token) : null;
   const initial = resolve();
   res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store, no-transform', 'X-Accel-Buffering': 'no' });
@@ -10,7 +10,8 @@ export function streamShare(req, res, { telemetry, store, config, viewers }) {
   function cleanup() {
     if (closed) return;
     closed = true;
-    clearTimeout(pending); clearInterval(heartbeat);
+    clearTimeout(pending); clearInterval(heartbeat); clearTimeout(drainTimeout);
+    res.off('drain', onDrain);
     telemetry.off('update', onUpdate); telemetry.off('connection', schedule);
     store.off('revoke', checkAccess);
     leave?.();
@@ -23,12 +24,30 @@ export function streamShare(req, res, { telemetry, store, config, viewers }) {
     const share = resolve();
     if (!share) return end();
     const data = { ...telemetry.snapshot(share.car_id), expiresAt: share.expires_at, localPreview: config.localPreview };
-    // Disconnect slow consumers rather than accumulate unbounded snapshots.
-    if (!res.write(`event: snapshot\ndata: ${JSON.stringify(data)}\n\n`)) { cleanup(); res.end(); }
+    const routeLine = data.routeLine ?? null;
+    // Geometry changes infrequently; avoid resending it with each position update.
+    if (routeLine === lastRouteLine) delete data.routeLine;
+    else data.routeLine = routeLine;
+    lastRouteLine = routeLine;
+    // A route can exceed the socket's high-water mark in a single frame.
+    // Wait for that frame to drain, coalescing further updates without queuing them.
+    if (!res.write(`event: snapshot\ndata: ${JSON.stringify(data)}\n\n`)) {
+      blocked = true;
+      drainTimeout = setTimeout(() => { cleanup(); res.destroy(); }, 15000);
+    }
   }
-  function schedule() { if (!closed && !pending) pending = setTimeout(send, 150); }
+  function schedule() {
+    if (closed) return;
+    if (blocked) { dirty = true; return; }
+    if (!pending) pending = setTimeout(send, 150);
+  }
+  function onDrain() {
+    blocked = false; clearTimeout(drainTimeout);
+    if (dirty) { dirty = false; schedule(); }
+  }
   function onUpdate(id) { if (id === initial?.car_id) schedule(); }
   res.on('close', cleanup);
+  res.on('drain', onDrain);
   if (!initial) return end();
   leave = viewers?.join(initial.id);
   telemetry.on('update', onUpdate); telemetry.on('connection', schedule);

@@ -87,6 +87,8 @@ export function createApp({ telemetry, store, config, verifyAdmin, connection, l
   app.get('/assets/style.css', (req, res) => res.sendFile(`${publicDir}style.css`));
   app.get('/assets/theme.js', (req, res) => res.sendFile(`${publicDir}theme.js`));
   app.get('/assets/map-follow.js', (req, res) => res.sendFile(`${publicDir}map-follow.js`));
+  app.get('/assets/route-line.js', (req, res) => res.sendFile(`${publicDir}route-line.js`));
+  app.get('/assets/route-line-layer.js', (req, res) => res.sendFile(`${publicDir}route-line-layer.js`));
   app.get('/assets/vector-map.js', (req, res) => res.sendFile(`${publicDir}vector-map.js`));
   app.get('/assets/viewer.js', (req, res) => res.sendFile(`${publicDir}viewer.js`));
   app.get('/favicon.svg', (req, res) => res.sendFile(`${publicDir}favicon.svg`));

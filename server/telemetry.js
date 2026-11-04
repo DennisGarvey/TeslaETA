@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events';
+import { decodeRouteLine, distanceMeters, routeLineMaxBytes } from '../public/route-line.js';
 const numeric = value => value !== null && value !== '' && Number.isFinite(Number(value)) ? Number(value) : null;
 const bounded = (value, min, max) => { const n = numeric(value); return n !== null && n >= min && n <= max ? n : null; };
 export function location(value) {
@@ -11,13 +12,20 @@ export class Telemetry extends EventEmitter {
   get connected() { return this._connected; }
   set connected(value) { if (this._connected !== value) { this._connected = value; this.emit('connection'); } }
   ingest(topic, payload, retained = false, now = Date.now()) {
-    const match = /^teslamate\/cars\/(\d+)\/([a-z_]+)$/.exec(topic);
-    if (!match || payload.length > 16384) return;
-    const [, id, field] = match;
-    if (!['display_name','state','healthy','speed','heading','battery_level','location','active_route'].includes(field)) return;
+    const match = /^teslamate\/cars\/(\d+)\/([a-zA-Z_]+)$/.exec(topic);
+    if (!match) return;
+    const [, id, topicField] = match;
+    const field = topicField === 'RouteLine' ? 'route_line' : topicField;
+    if (!['display_name','state','healthy','speed','heading','battery_level','location','active_route','route_line'].includes(field) || payload.length > (field === 'route_line' ? routeLineMaxBytes + 2 : 16384)) return;
     let value = payload.toString();
     if (['location','active_route'].includes(field)) { try { value = JSON.parse(value); } catch { return; } }
     const car = this.cars.get(id) || { id, fields: {} };
+    if (field === 'route_line') {
+      value = value.trim();
+      if (value.startsWith('"')) { try { value = JSON.parse(value); } catch { value = null; } }
+      const points = decodeRouteLine(value);
+      value = points ? { encoded: value, end: points.at(-1) } : null;
+    }
     if (field === 'location') value = location(value);
     if (field === 'speed') value = bounded(value, 0, 500);
     if (field === 'heading') value = bounded(value, 0, 360);
@@ -39,9 +47,12 @@ export class Telemetry extends EventEmitter {
     const get = field => car.fields[field]?.value ?? null;
     const fresh = field => this.connected && car.fields[field]?.liveAt != null && now - car.fields[field].liveAt < 120000;
     const route = get('active_route');
+    const line = get('route_line');
+    // Keep geometry pending when TeslaMate's independently published destination lags.
+    const lineMatches = line && (!car.fields.active_route || route) && (!route || distanceMeters(line.end, [route.location.latitude, route.location.longitude]) <= 500);
     return { id, connected: this.connected, name: get('display_name') || `Tesla ${id}`, state: get('state'),
       healthy: get('healthy'), speed: get('speed'), heading: get('heading'), battery: get('battery_level'),
-      location: get('location'), route, locationFresh: fresh('location'), speedFresh: fresh('speed'), routeFresh: fresh('active_route'),
+      location: get('location'), route, routeLine: lineMatches ? line.encoded : null, locationFresh: fresh('location'), speedFresh: fresh('speed'), routeFresh: fresh('active_route'),
       locationReceivedAt: car.fields.location?.receivedAt ?? null,
       locationLiveAt: car.fields.location?.liveAt ?? null,
       arrivalAt: route?.minutes != null && fresh('active_route') ? car.fields.active_route.liveAt + route.minutes * 60000 : null };

@@ -63,7 +63,7 @@ export class MqttConnection {
     const options = { username: settings.username || undefined, password: settings.password || undefined, reconnectPeriod: 5000, connectTimeout: 15000, clean: true };
     if (settings.transport === 'websocket') options.createWebsocket = url => new WebSocket(url, ['mqtt'], {
       headers: settings.cloudflare ? { 'CF-Access-Client-Id': settings.clientId, 'CF-Access-Client-Secret': settings.clientSecret } : {},
-      handshakeTimeout: 15000, maxPayload: 65536
+      handshakeTimeout: 15000, maxPayload: 512 * 1024
     });
     const client = enforceReadOnly(this.connect(settings.url, options)); this.client = client;
     client.on('connect', () => {

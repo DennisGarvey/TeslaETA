@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { Telemetry } from '../server/telemetry.js';
 import { Store } from '../server/store.js';
 import { createApp } from '../server/app.js';
+import { EventEmitter } from 'node:events';
+import { streamShare } from '../server/stream.js';
 async function fixture() {
   const telemetry = new Telemetry(), store = new Store(':memory:');
   telemetry.connected = true;
@@ -36,6 +38,12 @@ test('SSE pushes scoped updates, disconnect state, and revocation; removes liste
     f.telemetry.ingest('teslamate/cars/2/speed', Buffer.from('99'));
     f.telemetry.ingest('teslamate/cars/1/speed', Buffer.from('42'));
     const next = await stream.event(); assert.equal(next.data.speed, 42); assert.equal(next.data.id, '1');
+    const line = Buffer.from('????').toString('base64');
+    f.telemetry.ingest('teslamate/cars/2/route_line', Buffer.from(Buffer.from('@@AA').toString('base64')));
+    f.telemetry.ingest('teslamate/cars/1/route_line', Buffer.from(line));
+    const routed = await stream.event(); assert.equal(routed.data.routeLine, line);
+    f.telemetry.ingest('teslamate/cars/1/route_line', Buffer.alloc(0));
+    assert.equal((await stream.event()).data.routeLine, null);
     f.telemetry.connected = false; assert.equal((await stream.event()).data.connected, false);
     f.store.revoke(share.id); assert.equal((await stream.event()).type, 'ended');
     assert.equal(f.telemetry.listenerCount('update'), 0); assert.equal(f.store.listenerCount('revoke'), 0);
@@ -50,6 +58,67 @@ test('SSE terminates expired and invalid links without exposing telemetry', { ti
     stream = await openStream(`${f.base}/s/${share.token}/events`); assert.equal((await stream.event()).type, 'snapshot');
     assert.equal((await stream.event()).type, 'ended');
   } finally { await stream?.reader.cancel(); f.server.closeAllConnections(); await new Promise(resolve => f.server.close(resolve)); f.store.db.close(); }
+});
+
+test('a large route snapshot stays connected and continues to receive scoped updates', { timeout: 8000 }, async () => {
+  const f = await fixture(); let stream;
+  try {
+    const line = Buffer.from('??'.repeat(40000)).toString('base64');
+    assert.ok(line.length > 65536);
+    f.telemetry.ingest('teslamate/cars/1/route_line', Buffer.from(line));
+    const share = f.store.create('1', 'Trip', 1);
+    stream = await openStream(`${f.base}/s/${share.token}/events`);
+    assert.equal((await stream.event()).data.routeLine, line);
+    f.telemetry.ingest('teslamate/cars/1/speed', Buffer.from('42'));
+    const next = await stream.event();
+    assert.equal(next.data.routeLine, undefined); assert.equal(next.data.speed, 42);
+    f.telemetry.cars.clear(); f.telemetry.emit('connection');
+    const waiting = await stream.event();
+    assert.equal(waiting.data.waiting, true); assert.equal(waiting.data.routeLine, null);
+  } finally { await stream?.reader.cancel(); f.server.closeAllConnections(); await new Promise(resolve => f.server.close(resolve)); f.store.db.close(); }
+});
+
+test('a pending RouteLine is streamed when delayed TeslaMate metadata catches up, without republishing the line', { timeout: 8000 }, async () => {
+  const f = await fixture(); let stream;
+  try {
+    const line = Buffer.from('????').toString('base64');
+    const inactive = Buffer.from('{"error":"No active route available"}');
+    const active = Buffer.from('{"location":{"latitude":0,"longitude":0},"destination":"Trip"}');
+    f.telemetry.ingest('teslamate/cars/1/active_route', inactive);
+    f.telemetry.ingest('teslamate/cars/1/route_line', Buffer.from(line));
+    const share = f.store.create('1', 'Trip', 1);
+    stream = await openStream(`${f.base}/s/${share.token}/events`);
+    assert.equal((await stream.event()).data.routeLine, null);
+    f.telemetry.ingest('teslamate/cars/1/active_route', active);
+    assert.equal((await stream.event()).data.routeLine, line);
+    f.telemetry.ingest('teslamate/cars/1/active_route', inactive);
+    assert.equal((await stream.event()).data.routeLine, null);
+    f.telemetry.ingest('teslamate/cars/1/active_route', active);
+    assert.equal((await stream.event()).data.routeLine, line);
+  } finally { await stream?.reader.cancel(); f.server.closeAllConnections(); await new Promise(resolve => f.server.close(resolve)); f.store.db.close(); }
+});
+
+test('a blocked viewer coalesces updates until drain instead of accumulating snapshots', { timeout: 3000 }, async () => {
+  const telemetry = new Telemetry(), store = new Store(':memory:'), res = new EventEmitter();
+  const share = store.create('1', 'Trip', 1), frames = [];
+  let full = true, ended = false;
+  res.set = res.flushHeaders = () => {};
+  res.write = frame => { frames.push(frame); return !full || !frame.startsWith('event: snapshot'); };
+  res.end = res.destroy = () => { ended = true; };
+  try {
+    streamShare({ params: { token: share.token } }, res, { telemetry, store, config: {} });
+    for (let i = 0; i < 100; i++) telemetry.ingest('teslamate/cars/1/speed', Buffer.from(String(i)));
+    await new Promise(resolve => setTimeout(resolve, 180));
+    assert.equal(frames.filter(frame => frame.startsWith('event: snapshot')).length, 1);
+    assert.equal(ended, false);
+    full = false; res.emit('drain');
+    await new Promise(resolve => setTimeout(resolve, 180));
+    const snapshots = frames.filter(frame => frame.startsWith('event: snapshot'));
+    assert.equal(snapshots.length, 2);
+    assert.equal(JSON.parse(snapshots[1].match(/data: (.*)/)[1]).speed, 99);
+    res.emit('close');
+    assert.equal(telemetry.listenerCount('update'), 0); assert.equal(res.listenerCount('drain'), 0);
+  } finally { res.emit('close'); store.db.close(); }
 });
 
 test('live admin counts track joins, disconnects, per-link isolation and revocation', { timeout: 8000 }, async () => {

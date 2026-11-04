@@ -60,7 +60,7 @@ test('optional route topic accepts raw or JSON strings, remains scoped to its ca
   telemetry.ingest('teslamate/cars/1/active_route', Buffer.from(JSON.stringify({ location: { latitude: 40.02, longitude: -74 }, minutes_to_arrival: 10 })), false, 2000);
   assert.equal(telemetry.snapshot('1', 300000).routeLine, line);
   telemetry.ingest('teslamate/cars/1/route_line', Buffer.from('malformed'), false, 300001);
-  assert.equal(telemetry.snapshot('1').routeLine, null);
+  assert.equal(telemetry.snapshot('1').routeLine, line);
   assert.equal(telemetry.snapshot('2').routeLine, line);
   const large = encode(Array.from({ length: 10000 }, (_, index) => [40 + index / 1e6, -74 + index / 1e6]));
   assert.ok(large.length > 16384);
@@ -84,6 +84,8 @@ test('RouteLine waits for delayed TeslaMate destinations without discarding geom
   telemetry.ingest('teslamate/cars/1/active_route', navigation([41, -75]));
   assert.equal(telemetry.snapshot('1').routeLine, rerouted);
   telemetry.ingest('teslamate/cars/1/route_line', Buffer.alloc(0));
+  assert.equal(telemetry.snapshot('1').routeLine, rerouted);
+  telemetry.ingest('teslamate/cars/1/active_route', Buffer.from('{"error":"No active route available"}'));
   assert.equal(telemetry.snapshot('1').routeLine, null);
   telemetry.ingest('teslamate/cars/1/route_line', Buffer.from(line));
   telemetry.ingest('teslamate/cars/1/route_line', Buffer.from(Buffer.from([0x12, 0]).toString('base64')));
@@ -99,6 +101,65 @@ test('a RouteLine arriving after an inactive retained destination appears when T
   assert.equal(telemetry.snapshot('1').routeLine, null);
   telemetry.ingest('teslamate/cars/1/active_route', Buffer.from(JSON.stringify({ location: { latitude: points.at(-1)[0], longitude: points.at(-1)[1] } })));
   assert.equal(telemetry.snapshot('1').routeLine, line);
+});
+
+test('a replacement line keeps the previous matching line visible, while same-destination reroutes update immediately', () => {
+  const telemetry = new Telemetry();
+  const topic = 'teslamate/cars/1/';
+  const navigation = point => Buffer.from(JSON.stringify({ location: { latitude: point[0], longitude: point[1] } }));
+  telemetry.ingest(topic + 'active_route', navigation(points.at(-1)));
+  telemetry.ingest(topic + 'route_line', Buffer.from(line));
+  const rerouted = encode([[40, -74], [40.03, -73.96], points.at(-1)]);
+  telemetry.ingest(topic + 'route_line', Buffer.from(rerouted));
+  assert.equal(telemetry.snapshot('1').routeLine, rerouted);
+  const newDestination = [41, -75], replacement = encode([[40, -74], newDestination]);
+  telemetry.ingest(topic + 'route_line', Buffer.from(replacement));
+  assert.equal(telemetry.snapshot('1').routeLine, rerouted);
+  telemetry.ingest(topic + 'active_route', navigation(points.at(-1)));
+  assert.equal(telemetry.snapshot('1').routeLine, rerouted);
+  telemetry.ingest(topic + 'active_route', navigation(newDestination));
+  assert.equal(telemetry.snapshot('1').routeLine, replacement);
+  telemetry.ingest(topic + 'route_line', Buffer.alloc(0));
+  assert.equal(telemetry.snapshot('1').routeLine, replacement);
+  telemetry.ingest(topic + 'active_route', navigation(newDestination));
+  assert.equal(telemetry.snapshot('1').routeLine, replacement);
+  telemetry.ingest(topic + 'active_route', Buffer.from('{"error":"No active route available"}'));
+  assert.equal(telemetry.snapshot('1').routeLine, null);
+});
+
+test('route clearing stays synchronized for either message order and does not resurrect cleared geometry', () => {
+  const active = Buffer.from(JSON.stringify({ location: { latitude: points.at(-1)[0], longitude: points.at(-1)[1] } }));
+  const inactive = Buffer.from('{"error":"No active route available"}');
+  for (const clear of [Buffer.alloc(0), Buffer.from(Buffer.from([0x12, 0]).toString('base64'))]) {
+    for (const lineFirst of [true, false]) {
+      const telemetry = new Telemetry();
+      telemetry.ingest('teslamate/cars/1/active_route', active);
+      telemetry.ingest('teslamate/cars/1/route_line', Buffer.from(line));
+      if (lineFirst) {
+        telemetry.ingest('teslamate/cars/1/route_line', clear);
+        assert.equal(telemetry.snapshot('1').routeLine, line);
+        telemetry.ingest('teslamate/cars/1/active_route', active);
+        assert.equal(telemetry.snapshot('1').routeLine, line);
+        telemetry.ingest('teslamate/cars/1/active_route', inactive);
+      } else {
+        telemetry.ingest('teslamate/cars/1/active_route', inactive);
+        assert.equal(telemetry.snapshot('1').routeLine, null);
+        telemetry.ingest('teslamate/cars/1/route_line', clear);
+      }
+      assert.equal(telemetry.snapshot('1').routeLine, null);
+      assert.equal(telemetry.snapshot('1').route, null);
+      telemetry.ingest('teslamate/cars/1/active_route', active);
+      assert.equal(telemetry.snapshot('1').routeLine, null);
+    }
+  }
+});
+
+test('RouteLine-only sources still clear immediately when no TeslaMate navigation metadata exists', () => {
+  const telemetry = new Telemetry();
+  telemetry.ingest('teslamate/cars/1/route_line', Buffer.from(line));
+  assert.equal(telemetry.snapshot('1').routeLine, line);
+  telemetry.ingest('teslamate/cars/1/route_line', Buffer.alloc(0));
+  assert.equal(telemetry.snapshot('1').routeLine, null);
 });
 
 test('initial route progress ignores remaining distance belonging to an older destination', () => {

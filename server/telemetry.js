@@ -2,6 +2,7 @@ import { EventEmitter } from 'node:events';
 import { decodeRouteLine, distanceMeters, routeLineMaxBytes } from '../public/route-line.js';
 const numeric = value => value !== null && value !== '' && Number.isFinite(Number(value)) ? Number(value) : null;
 const bounded = (value, min, max) => { const n = numeric(value); return n !== null && n >= min && n <= max ? n : null; };
+const lineMatchesDestination = (line, activeRoute) => line && (!activeRoute || (activeRoute.value && distanceMeters(line.end, [activeRoute.value.location.latitude, activeRoute.value.location.longitude]) <= 500));
 export function location(value) {
   if (!value || typeof value !== 'object') return null;
   const latitude = bounded(value.latitude, -90, 90), longitude = bounded(value.longitude, -180, 180);
@@ -38,6 +39,13 @@ export class Telemetry extends EventEmitter {
       battery: bounded(value.energy_at_arrival, 0, 100), traffic: bounded(value.traffic_minutes_delay, 0, 100000)
     } : null;
     car.fields[field] = { value, receivedAt: now, liveAt: retained ? null : now };
+    if (field === 'route_line' || field === 'active_route') {
+      const line = car.fields.route_line?.value, destination = car.fields.active_route;
+      if (lineMatchesDestination(line, destination)) car.visibleRouteLine = line;
+      // Keep matching geometry while a replacement or clear waits for TeslaMate.
+      // A source with no TeslaMate navigation metadata can still clear directly.
+      else if (!lineMatchesDestination(car.visibleRouteLine, destination) || (!line && !destination?.value)) car.visibleRouteLine = null;
+    }
     this.cars.set(id, car);
     this.emit('update', id);
   }
@@ -47,12 +55,9 @@ export class Telemetry extends EventEmitter {
     const get = field => car.fields[field]?.value ?? null;
     const fresh = field => this.connected && car.fields[field]?.liveAt != null && now - car.fields[field].liveAt < 120000;
     const route = get('active_route');
-    const line = get('route_line');
-    // Keep geometry pending when TeslaMate's independently published destination lags.
-    const lineMatches = line && (!car.fields.active_route || route) && (!route || distanceMeters(line.end, [route.location.latitude, route.location.longitude]) <= 500);
     return { id, connected: this.connected, name: get('display_name') || `Tesla ${id}`, state: get('state'),
       healthy: get('healthy'), speed: get('speed'), heading: get('heading'), battery: get('battery_level'),
-      location: get('location'), route, routeLine: lineMatches ? line.encoded : null, locationFresh: fresh('location'), speedFresh: fresh('speed'), routeFresh: fresh('active_route'),
+      location: get('location'), route, routeLine: car.visibleRouteLine?.encoded ?? null, locationFresh: fresh('location'), speedFresh: fresh('speed'), routeFresh: fresh('active_route'),
       locationReceivedAt: car.fields.location?.receivedAt ?? null,
       locationLiveAt: car.fields.location?.liveAt ?? null,
       arrivalAt: route?.minutes != null && fresh('active_route') ? car.fields.active_route.liveAt + route.minutes * 60000 : null };

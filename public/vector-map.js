@@ -84,15 +84,14 @@ export function createVectorMap(container) {
   });
   observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
 
-  // Tracking listens to camera-start events. Suppress those raised by our own fits.
-  let movingByCode = false;
-  map.on('moveend', () => { movingByCode = false; });
-  const move = options => { movingByCode = true; map.easeTo({ ...options, duration: 350 }); };
+  const move = options => map.easeTo({ ...options, duration: 350 });
   return {
     raw: map,
     on(events, callback) {
       for (const event of events.split(' ')) map.on(event, (...args) => {
-        if (!movingByCode || event === 'resize') callback(...args);
+        // Resize and camera animations also emit movement events. Only actual
+        // pointer, touch, keyboard or control input should pause tracking.
+        if (!['dragstart', 'movestart', 'zoomstart'].includes(event) || args[0]?.originalEvent) callback(...args);
       });
       return this;
     },
@@ -106,7 +105,6 @@ export function createVectorMap(container) {
       else {
         const bounds = new maplibregl.LngLatBounds();
         for (const point of points) bounds.extend(latLng(point));
-        movingByCode = true;
         map.fitBounds(bounds, { padding, maxZoom, duration: 350 });
       }
     },

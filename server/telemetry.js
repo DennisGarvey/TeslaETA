@@ -3,6 +3,7 @@ import { decodeRouteLine, distanceMeters, routeLineMaxBytes } from '../public/ro
 const numeric = value => value !== null && value !== '' && Number.isFinite(Number(value)) ? Number(value) : null;
 const bounded = (value, min, max) => { const n = numeric(value); return n !== null && n >= min && n <= max ? n : null; };
 const lineMatchesDestination = (line, activeRoute) => line && (!activeRoute || (activeRoute.value && distanceMeters(line.end, [activeRoute.value.location.latitude, activeRoute.value.location.longitude]) <= 500));
+const destinationKey = activeRoute => activeRoute?.value ? JSON.stringify([activeRoute.value.location.latitude, activeRoute.value.location.longitude, activeRoute.value.destination]) : null;
 export function location(value) {
   if (!value || typeof value !== 'object') return null;
   const latitude = bounded(value.latitude, -90, 90), longitude = bounded(value.longitude, -180, 180);
@@ -41,10 +42,38 @@ export class Telemetry extends EventEmitter {
     car.fields[field] = { value, receivedAt: now, liveAt: retained ? null : now };
     if (field === 'route_line' || field === 'active_route') {
       const line = car.fields.route_line?.value, destination = car.fields.active_route;
-      if (lineMatchesDestination(line, destination)) car.visibleRouteLine = line;
-      // Keep matching geometry while a replacement or clear waits for TeslaMate.
-      // A source with no TeslaMate navigation metadata can still clear directly.
-      else if (!lineMatchesDestination(car.visibleRouteLine, destination) || (!line && !destination?.value)) car.visibleRouteLine = null;
+      const key = destinationKey(destination);
+      let accepted = car.acceptedRouteLine;
+      if (lineMatchesDestination(line, destination)) {
+        // Compare route endpoints to identify reroutes. Pin proximity alone cannot
+        // distinguish nearby destinations; the pin may be away from the road.
+        const sameEndpoint = accepted && distanceMeters(line.end, accepted.line.end) <= 1;
+        const newGeometry = accepted && line.encoded !== accepted.line.encoded;
+        if (!accepted || !destination || accepted.destinationKey === null || (accepted.fallback && key !== accepted.destinationKey) || (newGeometry && (sameEndpoint || key !== accepted.destinationKey))) {
+          accepted = { line, destinationKey: key };
+        }
+      }
+      // A pending replacement or clear leaves the old matching line visible.
+      if (!line && (!destination?.value || key !== accepted?.destinationKey)) accepted = null;
+      car.acceptedRouteLine = accepted;
+      car.visibleRouteLine = (accepted?.fallback || lineMatchesDestination(accepted?.line, destination)) && (!destination || key === accepted.destinationKey) ? accepted.line : null;
+      const pending = line && destination?.value && line.encoded !== accepted?.line.encoded;
+      if (!pending || car.pendingRouteLine?.encoded !== line.encoded || car.pendingRouteLine?.destinationKey !== key) {
+        clearTimeout(car.pendingRouteLine?.timer);
+        car.pendingRouteLine = null;
+        if (pending) {
+          const waiting = { encoded: line.encoded, destinationKey: key };
+          car.pendingRouteLine = waiting;
+          waiting.timer = setTimeout(() => {
+            if (car.pendingRouteLine !== waiting) return;
+            car.pendingRouteLine = null;
+            car.acceptedRouteLine = { line, destinationKey: key, fallback: true };
+            car.visibleRouteLine = line;
+            this.emit('update', id);
+          }, 10000);
+          waiting.timer.unref?.();
+        }
+      }
     }
     this.cars.set(id, car);
     this.emit('update', id);

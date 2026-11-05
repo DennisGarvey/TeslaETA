@@ -147,6 +147,37 @@ test('SSE keeps a clearing route visible until TeslaMate clears its destination,
   } finally { await stream?.reader.cancel(); f.server.closeAllConnections(); await new Promise(resolve => f.server.close(resolve)); f.store.db.close(); }
 });
 
+test('nearby endpoints do not switch early on SSE, and an offset TeslaMate pin is preserved', { timeout: 8000 }, async () => {
+  const f = await fixture(); let stream;
+  try {
+    const oldLine = Buffer.from('????').toString('base64');
+    const polyline = '??o}@?';
+    const newLine = Buffer.from(polyline).toString('base64');
+    const oldPin = { latitude: 0, longitude: -0.001 };
+    const newPin = { latitude: 0.001, longitude: -0.001 };
+    const navigation = (location, destination) => Buffer.from(JSON.stringify({ location, destination }));
+    f.telemetry.ingest('teslamate/cars/1/active_route', navigation(oldPin, 'Old'));
+    f.telemetry.ingest('teslamate/cars/1/route_line', Buffer.from(oldLine));
+    const share = f.store.create('1', 'Trip', 1);
+    stream = await openStream(`${f.base}/s/${share.token}/events`);
+    assert.equal((await stream.event()).data.routeLine, oldLine);
+    f.telemetry.ingest('teslamate/cars/1/route_line', Buffer.from(newLine));
+    const pending = await stream.event();
+    assert.equal(pending.data.routeLine, undefined);
+    assert.deepEqual(pending.data.route.location, oldPin);
+    assert.equal(f.telemetry.snapshot('1').routeLine, oldLine);
+    f.telemetry.ingest('teslamate/cars/1/active_route', navigation(newPin, 'New'));
+    const matched = await stream.event();
+    assert.equal(matched.data.routeLine, newLine);
+    assert.deepEqual(matched.data.route.location, newPin);
+    const rerouted = Buffer.from(polyline + '??').toString('base64');
+    f.telemetry.ingest('teslamate/cars/1/route_line', Buffer.from(rerouted));
+    const immediate = await stream.event();
+    assert.equal(immediate.data.routeLine, rerouted);
+    assert.deepEqual(immediate.data.route.location, newPin);
+  } finally { await stream?.reader.cancel(); f.server.closeAllConnections(); await new Promise(resolve => f.server.close(resolve)); f.store.db.close(); }
+});
+
 test('a blocked viewer coalesces updates until drain instead of accumulating snapshots', { timeout: 3000 }, async () => {
   const telemetry = new Telemetry(), store = new Store(':memory:'), res = new EventEmitter();
   const share = store.create('1', 'Trip', 1), frames = [];

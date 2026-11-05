@@ -15,6 +15,38 @@ export function vectorMapEnabled() {
   return new URLSearchParams(location.search).get('map') !== 'raster';
 }
 
+export function enableTrackpadGestures(map) {
+  const container = map.getContainer();
+  let gesture = null, touches = 0;
+  const touch = event => { touches = event.touches.length; };
+  const start = event => {
+    // Touchscreens already use MapLibre's native pinch, rotate and pitch handlers.
+    if (touches) return;
+    event.preventDefault();
+    map.stop();
+    const rect = container.getBoundingClientRect();
+    gesture = { bearing: map.getBearing(), zoom: map.getZoom(),
+      around: map.unproject([event.clientX - rect.left, event.clientY - rect.top]) };
+  };
+  const change = event => {
+    if (!gesture || touches) return;
+    event.preventDefault();
+    if (!Number.isFinite(event.rotation) || !Number.isFinite(event.scale) || event.scale <= 0) return;
+    map.easeTo({ bearing: gesture.bearing - event.rotation,
+      zoom: gesture.zoom + Math.log2(event.scale), around: gesture.around, duration: 0 }, { originalEvent: event });
+  };
+  const end = event => { if (gesture) event.preventDefault(); gesture = null; };
+  const wheel = event => {
+    if (gesture && event.ctrlKey) { event.preventDefault(); event.stopImmediatePropagation(); }
+  };
+  const listeners = { touchstart: touch, touchend: touch, touchcancel: touch,
+    gesturestart: start, gesturechange: change, gestureend: end, wheel };
+  for (const [name, listener] of Object.entries(listeners)) container.addEventListener(name, listener, { passive: false, capture: true });
+  map.on('remove', () => {
+    for (const [name, listener] of Object.entries(listeners)) container.removeEventListener(name, listener, true);
+  });
+}
+
 export function createVectorMap(container) {
   const dark = () => document.documentElement.classList.contains('theme-dark');
   const styleUrls = { light: lightStyle, dark: darkStyle };
@@ -30,6 +62,7 @@ export function createVectorMap(container) {
     center: [-98, 39], zoom: 4, maxZoom: 19,
     attributionControl: false, fadeDuration: 0
   });
+  enableTrackpadGestures(map);
   let currentStyleName = dark() ? 'dark' : 'light';
   const setStyle = name => {
     const current = styleCache.get(currentStyleName);
@@ -96,6 +129,9 @@ export function vectorMarker(point, { icon, title }, map) {
     element.style.width = `${next.options.iconSize[0]}px`;
     element.style.height = `${next.options.iconSize[1]}px`;
     element.innerHTML = next.options.html;
+    const alignment = element.classList.contains('vehicle-marker') ? 'map' : 'viewport';
+    marker.setRotationAlignment(alignment);
+    marker.setPitchAlignment(alignment);
     // The destination pin's tip, rather than its center, denotes the coordinate.
     marker.setOffset(element.classList.contains('destination-marker') ? [0, -20] : [0, 0]);
   };

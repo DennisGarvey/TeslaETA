@@ -127,6 +127,95 @@ test('a replacement line keeps the previous matching line visible, while same-de
   assert.equal(telemetry.snapshot('1').routeLine, null);
 });
 
+test('nearby changed route endpoints wait for metadata even when both routes end near an offset pin', () => {
+  const telemetry = new Telemetry(), topic = 'teslamate/cars/1/';
+  const oldPin = [40.02, -74], oldEnd = [40.021, -74], newEnd = [40.0203, -74];
+  const oldLine = encode([[40, -74], oldEnd]);
+  const newLine = encode([[40, -74], newEnd]);
+  const navigation = (pin, name) => Buffer.from(JSON.stringify({ location: { latitude: pin[0], longitude: pin[1] }, destination: name }));
+  telemetry.ingest(topic + 'active_route', navigation(oldPin, 'Old'));
+  telemetry.ingest(topic + 'route_line', Buffer.from(oldLine));
+  assert.equal(telemetry.snapshot('1').routeLine, oldLine);
+  // The replacement is even closer to the old pin, but has a different road endpoint.
+  telemetry.ingest(topic + 'route_line', Buffer.from(newLine));
+  assert.equal(telemetry.snapshot('1').routeLine, oldLine);
+  telemetry.ingest(topic + 'active_route', navigation(oldPin, 'Old'));
+  assert.equal(telemetry.snapshot('1').routeLine, oldLine);
+  const newPin = [40.0203, -73.999];
+  telemetry.ingest(topic + 'active_route', navigation(newPin, 'New'));
+  assert.equal(telemetry.snapshot('1').routeLine, newLine);
+  assert.deepEqual(telemetry.snapshot('1').route.location, { latitude: newPin[0], longitude: newPin[1] });
+  const reroute = encode([[40, -74], [40.01, -73.99], newEnd]);
+  telemetry.ingest(topic + 'route_line', Buffer.from(reroute));
+  assert.equal(telemetry.snapshot('1').routeLine, reroute);
+});
+
+test('a pending line is pushed after ten seconds without moving the TeslaMate pin', t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const telemetry = new Telemetry(), topic = 'teslamate/cars/1/';
+  const active = point => Buffer.from(JSON.stringify({ location: { latitude: point[0], longitude: point[1] } }));
+  const replacement = encode([[40, -74], [41, -75]]);
+  telemetry.ingest(topic + 'active_route', active(points.at(-1)));
+  telemetry.ingest(topic + 'route_line', Buffer.from(line));
+  telemetry.ingest(topic + 'route_line', Buffer.from(replacement));
+  t.mock.timers.tick(9000);
+  // Duplicate route and destination messages must not postpone the deadline.
+  telemetry.ingest(topic + 'route_line', Buffer.from(replacement));
+  telemetry.ingest(topic + 'active_route', active(points.at(-1)));
+  t.mock.timers.tick(999);
+  assert.equal(telemetry.snapshot('1').routeLine, line);
+  let pushed = 0;
+  telemetry.on('update', id => { if (id === '1') pushed++; });
+  t.mock.timers.tick(1);
+  assert.equal(pushed, 1);
+  assert.equal(telemetry.snapshot('1').routeLine, replacement);
+  assert.deepEqual(telemetry.snapshot('1').route.location, { latitude: 40.02, longitude: -74 });
+  telemetry.ingest(topic + 'active_route', active(points.at(-1)));
+  assert.equal(telemetry.snapshot('1').routeLine, replacement);
+  telemetry.ingest(topic + 'active_route', active([41, -75]));
+  assert.equal(telemetry.snapshot('1').routeLine, replacement);
+});
+
+test('pending timers are replaced by new geometry and cancelled by metadata or a clear', t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const telemetry = new Telemetry(), topic = 'teslamate/cars/1/';
+  const active = point => Buffer.from(JSON.stringify({ location: { latitude: point[0], longitude: point[1] } }));
+  const replacement = encode([[40, -74], [41, -75]]);
+  const latest = encode([[40, -74], [42, -76]]);
+  telemetry.ingest(topic + 'active_route', active(points.at(-1)));
+  telemetry.ingest(topic + 'route_line', Buffer.from(line));
+  telemetry.ingest(topic + 'route_line', Buffer.from(replacement));
+  t.mock.timers.tick(5000);
+  telemetry.ingest(topic + 'route_line', Buffer.from(latest));
+  t.mock.timers.tick(5000);
+  assert.equal(telemetry.snapshot('1').routeLine, line);
+  telemetry.ingest(topic + 'active_route', active([42, -76]));
+  assert.equal(telemetry.snapshot('1').routeLine, latest);
+  let pushed = 0;
+  telemetry.on('update', () => pushed++);
+  t.mock.timers.tick(10000);
+  assert.equal(pushed, 0);
+  telemetry.ingest(topic + 'route_line', Buffer.from(replacement));
+  telemetry.ingest(topic + 'route_line', Buffer.alloc(0));
+  const count = pushed;
+  t.mock.timers.tick(10000);
+  assert.equal(pushed, count);
+  assert.equal(telemetry.snapshot('1').routeLine, latest);
+});
+
+test('a nearby destination arriving first does not bind the old line to the new destination', () => {
+  const telemetry = new Telemetry(), topic = 'teslamate/cars/1/';
+  const active = point => Buffer.from(JSON.stringify({ location: { latitude: point[0], longitude: point[1] } }));
+  const oldEnd = [40.02, -74], newEnd = [40.021, -74];
+  const oldLine = encode([[40, -74], oldEnd]), replacement = encode([[40, -74], newEnd]);
+  telemetry.ingest(topic + 'active_route', active(oldEnd));
+  telemetry.ingest(topic + 'route_line', Buffer.from(oldLine));
+  telemetry.ingest(topic + 'active_route', active(newEnd));
+  assert.equal(telemetry.snapshot('1').routeLine, null);
+  telemetry.ingest(topic + 'route_line', Buffer.from(replacement));
+  assert.equal(telemetry.snapshot('1').routeLine, replacement);
+});
+
 test('route clearing stays synchronized for either message order and does not resurrect cleared geometry', () => {
   const active = Buffer.from(JSON.stringify({ location: { latitude: points.at(-1)[0], longitude: points.at(-1)[1] } }));
   const inactive = Buffer.from('{"error":"No active route available"}');

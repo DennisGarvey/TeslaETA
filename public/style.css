@@ -132,8 +132,15 @@ a.share-title:hover{text-decoration-color:currentColor}
 .theme-dark .metrics,.theme-dark .details,.theme-dark .share-row,.theme-dark #created,.theme-dark .admin-nav{border-color:#3a3a3e}
 .theme-dark .map-wrap,.theme-dark .leaflet-container{background:#303033}
 .theme-dark .leaflet-tile{filter:grayscale(1) invert(1) contrast(.85) brightness(1.4)}
+.map-button{height:29px;padding:0 10px;border:0;border-radius:4px;background:#fff;color:#333;font-size:12px;font-weight:500;line-height:29px;box-shadow:0 0 0 2px #0000001a}
+.map-button:hover:not(:disabled){background:#f2f2f2;filter:none}
 .theme-dark .leaflet-bar a,.theme-dark .map-button{background:#2c2c2f;color:#ededee;border-color:#535358}
+.theme-dark .map-button{box-shadow:0 0 0 1px #535358}
 .theme-dark .leaflet-bar a:hover,.theme-dark .map-button:hover{background:#3a3a3e;color:#fff}
+.theme-dark .maplibregl-ctrl-group{background:#2c2c2f;box-shadow:0 0 0 1px #535358}
+.theme-dark .maplibregl-ctrl-group button{background:transparent;color:#ededee;border-color:#535358}
+.theme-dark .maplibregl-ctrl-group button:hover:not(:disabled){background:#3a3a3e;filter:none}
+.theme-dark .maplibregl-ctrl-group .maplibregl-ctrl-icon{filter:invert(1)}
 .theme-dark .map-button[aria-pressed="true"]{color:#ededee}
 .theme-dark .leaflet-control-attribution{background:#1c1c1ee8!important;color:#bdbdc1!important}
 .theme-dark .leaflet-control-attribution a{color:#d0d0d3}

@@ -136,12 +136,23 @@ async function api(path, options = {}) {
 async function refresh() {
   try {
     const [status, shares] = await Promise.all([api('status'), api('shares')]);
+    const version = status.version;
+    const versionElement = $('app-version');
+    versionElement.hidden = !version?.commit;
+    if (version?.commit) {
+      versionElement.textContent = `Version ${version.commit.slice(0, 7)}`;
+      versionElement.href = `https://github.com/DennisGarvey/TeslaETA/commit/${version.commit}`;
+      versionElement.title = version.commit;
+    } else {
+      versionElement.textContent = '';
+      versionElement.removeAttribute('href');
+    }
     showMqttConnection(status);
     renderFleet(status.cars);
     if (displayedShareId && !shares.some(share => share.id === displayedShareId && share.expires_at > Date.now())) {
       displayedShareId = null; $('created').hidden = true; $('url').value = ''; $('open').removeAttribute('href'); $('message').textContent = '';
     }
-    if (!$('connection-panel').hidden) { const settings = await api('connection'); setConnectionStatus(settings.status || 'Not configured'); }
+    if (!$('settings-panel').hidden) { const settings = await api('connection'); setConnectionStatus(settings.status || 'Not configured'); }
     const activeShares = shares.filter(share => share.recoverable && share.expires_at > Date.now());
     const activeIds = new Set(activeShares.map(share => share.id));
     for (const id of shareUrls.keys()) if (!activeIds.has(id)) shareUrls.delete(id);
@@ -247,12 +258,12 @@ function showConnection(settings) {
   connectionFields();
 }
 async function selectPanel(active) {
-  for (const name of ['sharing', 'map', 'connection', 'settings']) {
+  for (const name of ['sharing', 'map', 'settings']) {
     $(name + '-panel').hidden = name !== active;
     $(name + '-tab').setAttribute('aria-pressed', String(name === active));
   }
   if (active === 'map') initFleetMap();
-  if (active === 'connection') { try { showConnection(await api('connection')); } catch (error) { $('connection-message').textContent = error.message; } }
+  if (active === 'settings') { try { showConnection(await api('connection')); } catch (error) { $('connection-message').textContent = error.message; } }
   if (active === 'settings') { try { const settings = await api('sharing-settings'); $('public-origin').value = settings.publicOrigin; } catch (error) { $('sharing-settings-message').textContent = error.message; } }
 }
 $('settings-tab').onclick = () => selectPanel('settings');
@@ -270,8 +281,10 @@ $('sharing-settings-form').onsubmit = async event => {
 };
 $('sharing-tab').onclick = () => selectPanel('sharing');
 $('map-tab').onclick = () => selectPanel('map');
-$('connection-tab').onclick = () => selectPanel('connection');
-$('mqtt-alert-settings').onclick = () => selectPanel('connection');
+$('mqtt-alert-settings').onclick = async () => {
+  await selectPanel('settings');
+  $('connection-panel').scrollIntoView({ block: 'start', behavior: 'smooth' });
+};
 function detectTransport() {
   const protocol = $('mqtt-url').value.trim().match(/^([a-z]+):\/\//i)?.[1].toLowerCase();
   if (['ws', 'wss', 'http', 'https'].includes(protocol)) $('transport').value = 'websocket';

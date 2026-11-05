@@ -5,6 +5,8 @@ RUN npm ci --omit=dev
 COPY server ./server
 COPY public ./public
 RUN mkdir /data && chown node:node /data
+ARG APP_COMMIT
+ENV APP_COMMIT=${APP_COMMIT}
 ENV NODE_ENV=production PORT=3001 DATABASE_PATH=/data/eta.sqlite
 USER node
 EXPOSE 3001

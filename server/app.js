@@ -6,6 +6,7 @@ import { streamShare } from './stream.js';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { fileURLToPath } from 'node:url';
 import { logger as defaultLogger, errorDetails } from './logger.js';
+import { runningVersion } from './version.js';
 const publicDir = fileURLToPath(new URL('../public/', import.meta.url));
 export function createApp({ telemetry, store, config, verifyAdmin, connection, logger = defaultLogger }) {
   const app = express();
@@ -54,7 +55,7 @@ export function createApp({ telemetry, store, config, verifyAdmin, connection, l
     connection.apply(settings);
     res.json(connection.publicSettings());
   });
-  app.get('/admin/api/status', (req, res) => res.json({ localPreview: config.localPreview, connected: telemetry.connected, configured: connection ? !!connection.settings : config.mqttConfigured, nextLinkName: store.nextLinkName(), cars: [...telemetry.cars.keys()].map(id => telemetry.snapshot(id)) }));
+  app.get('/admin/api/status', (req, res) => res.json({ version: runningVersion, localPreview: config.localPreview, connected: telemetry.connected, configured: connection ? !!connection.settings : config.mqttConfigured, nextLinkName: store.nextLinkName(), cars: [...telemetry.cars.keys()].map(id => telemetry.snapshot(id)) }));
   app.get('/admin/api/viewers/events', (req, res) => streamViewers(req, res, viewers, telemetry, () => connection ? !!connection.settings : config.mqttConfigured));
   app.get('/admin/api/shares', (req, res) => res.json(store.list().map(share => ({ ...share, viewers: viewers.count(share.id) }))));
   app.get('/admin/api/shares/:id/link', (req, res) => {

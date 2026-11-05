@@ -41,7 +41,7 @@
 
 .share-row .viewer-count{font-size:13px;color:#34383d;font-variant-numeric:tabular-nums;margin-top:8px}
 
-#settings-panel{max-width:650px;min-height:0;overflow:auto}#sharing-settings-form{margin-top:16px}#sharing-settings-form .muted{margin:0}#save-sharing-settings{justify-self:start}#sharing-settings-message{font-size:14px}
+#settings-panel{width:100%;min-height:0;overflow:auto}#sharing-settings-form{margin-top:16px}#sharing-settings-form .muted{margin:0}#save-sharing-settings{justify-self:start}#sharing-settings-message{font-size:14px}
 
 select{appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath d='m4 6 4 4 4-4' fill='none' stroke='%23647478' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;background-size:16px 16px}
 select,.connection-panel select{padding-right:40px}
@@ -194,8 +194,21 @@ a.share-title:hover{text-decoration-color:currentColor}
 .home-page>.admin{width:100%;flex:1}
 .home-footer{padding:18px 24px;border-top:1px solid #e2e7e9}
 .home-footer>div{max-width:1072px;margin:0 auto}
-.home-footer a{display:inline-flex;align-items:center;gap:8px;color:#647478;font-size:13px;text-decoration:none}
-.home-footer a:hover{text-decoration:underline;text-underline-offset:3px}
-.home-footer svg{width:18px;height:18px;flex:none;fill:currentColor}
+.home-footer a,.about-links a{display:inline-flex;align-items:center;gap:8px;color:#647478;font-size:13px;text-decoration:none}
+.home-footer a:hover,.about-links a:hover{text-decoration:underline;text-underline-offset:3px}
+.home-footer svg,.about-links svg{width:18px;height:18px;flex:none;fill:currentColor}
 .theme-dark .home-footer{border-top-color:#3a3a3e}
-.theme-dark .home-footer a{color:#b5b5ba}
+.theme-dark .home-footer a,.theme-dark .about-links a{color:#b5b5ba}
+.settings-grid{display:flex;flex-direction:column;gap:20px;padding:0}
+.settings-grid>.panel{flex:none;width:100%}
+.admin-page .settings-grid .connection-panel{max-width:none;overflow:visible}
+.about-links{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px}
+.admin-nav{overflow-x:auto}.admin-nav button{white-space:nowrap;flex-shrink:0}
+.admin-page .admin{height:auto;min-height:calc(100dvh - 60px);overflow:visible}
+.admin-page .admin-grid,.admin-page #settings-panel{overflow:visible;flex:none}
+.admin-page #map-panel{flex:none;overflow:visible}
+.admin-page #map-panel .fleet-content{flex:none;min-height:390px}
+.admin-page #map-panel .fleet-list{max-height:none;overflow:visible}
+.admin-page #map-panel .fleet-map-wrap{min-height:390px}
+
+.admin-root{scrollbar-gutter:stable}

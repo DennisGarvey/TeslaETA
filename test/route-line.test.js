@@ -332,6 +332,7 @@ test('vector route layers wait for the style, update once, survive style replace
   layer.update(view); assert.equal(updates.length, 0);
   loaded = true; events['style.load']();
   assert.equal(rendered.size, 3);
+  assert.deepEqual(rendered.get('tesla-route-remaining').paint['line-width'], ['interpolate', ['linear'], ['zoom'], 10, 4, 15, 6, 19, 9]);
   assert.equal(updates.length, 1);
   assert.deepEqual(updates[0].features.find(feature => feature.properties.part === 'remaining').geometry.coordinates[0], [-73.98, 40]);
   layer.update(view); events.idle(); assert.equal(updates.length, 1);
@@ -342,14 +343,19 @@ test('vector route layers wait for the style, update once, survive style replace
 
 test('raster fallback displays and removes the same remaining and completed geometry', () => {
   const rendered = [], removed = [];
+  let zoom = 10, onZoom;
   const leaflet = { polyline(points, options) {
     const layer = { addTo() { rendered.push({ points, options }); return layer; }, remove() { removed.push(layer); } };
     return layer;
   } };
-  const layer = createRouteLineLayer({}, false, leaflet);
+  const layer = createRouteLineLayer({ getZoom: () => zoom, on: (event, callback) => { assert.equal(event, 'zoomend'); onZoom = callback; } }, false, leaflet);
   layer.update(new RouteProgress().update(line, points[1]));
   assert.equal(rendered.length, 3);
   closePoint(rendered.at(-1).points[0], points[1]);
   assert.equal(rendered.at(-1).options.interactive, false);
-  layer.update(null); assert.equal(removed.length, 3);
+  assert.equal(rendered.at(-1).options.weight, 4);
+  zoom = 17; onZoom(); assert.equal(rendered.at(-1).options.weight, 7.5);
+  zoom = 19; onZoom(); assert.equal(rendered.at(-1).options.weight, 9);
+  zoom = 22; onZoom(); assert.equal(rendered.at(-1).options.weight, 9);
+  layer.update(null); assert.equal(removed.length, 12);
 });

@@ -1,10 +1,21 @@
 const empty = () => ({ type: 'FeatureCollection', features: [] });
 const sourceId = 'tesla-route-line';
+const width = (far, middle, close) => ['interpolate', ['linear'], ['zoom'], 10, far, 15, middle, 19, close];
 const layers = [
-  { id: 'tesla-route-completed', filter: ['==', ['get', 'part'], 'completed'], paint: { 'line-color': '#87939d', 'line-width': 4, 'line-opacity': 0.5 } },
-  { id: 'tesla-route-casing', filter: ['==', ['get', 'part'], 'remaining'], paint: { 'line-color': '#114b91', 'line-width': 7, 'line-opacity': 0.85 } },
-  { id: 'tesla-route-remaining', filter: ['==', ['get', 'part'], 'remaining'], paint: { 'line-color': '#2685ef', 'line-width': 4.5 } }
+  { id: 'tesla-route-completed', filter: ['==', ['get', 'part'], 'completed'], paint: { 'line-color': '#87939d', 'line-width': width(3, 4.5, 6.5), 'line-opacity': 0.5 } },
+  { id: 'tesla-route-casing', filter: ['==', ['get', 'part'], 'remaining'], paint: { 'line-color': '#114b91', 'line-width': width(6, 8.5, 12), 'line-opacity': 0.85 } },
+  { id: 'tesla-route-remaining', filter: ['==', ['get', 'part'], 'remaining'], paint: { 'line-color': '#2685ef', 'line-width': width(4, 6, 9) } }
 ];
+function rasterWidth(expression, zoom) {
+  const stops = expression.slice(3);
+  for (let i = 2; i < stops.length; i += 2) {
+    if (zoom <= stops[i]) {
+      const fraction = Math.max(0, (zoom - stops[i - 2]) / (stops[i] - stops[i - 2]));
+      return stops[i - 1] + fraction * (stops[i + 1] - stops[i - 1]);
+    }
+  }
+  return stops.at(-1);
+}
 
 export function createRouteLineLayer(map, vector, leaflet = globalThis.L) {
   let previous, geometry = empty(), dirty = false;
@@ -27,7 +38,7 @@ export function createRouteLineLayer(map, vector, leaflet = globalThis.L) {
         const feature = geometry.features.find(feature => feature.properties.part === layer.filter[2]);
         if (!feature) continue;
         rasterLayers.push(leaflet.polyline(feature.geometry.coordinates.map(([lng, lat]) => [lat, lng]), {
-          color: layer.paint['line-color'], weight: layer.paint['line-width'], opacity: layer.paint['line-opacity'] ?? 1,
+          color: layer.paint['line-color'], weight: rasterWidth(layer.paint['line-width'], map.getZoom()), opacity: layer.paint['line-opacity'] ?? 1,
           lineCap: 'round', lineJoin: 'round', interactive: false
         }).addTo(map));
       }
@@ -37,7 +48,7 @@ export function createRouteLineLayer(map, vector, leaflet = globalThis.L) {
   if (vector) {
     map.raw.on('style.load', () => { dirty = true; apply(); });
     map.raw.on('idle', apply);
-  }
+  } else map.on('zoomend', () => { dirty = true; apply(); });
   return {
     update(view) {
       if (view === previous) return;

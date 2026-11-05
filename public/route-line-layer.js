@@ -3,8 +3,8 @@ const sourceId = 'tesla-route-line';
 const width = (far, middle, close) => ['interpolate', ['linear'], ['zoom'], 10, far, 15, middle, 19, close];
 const layers = [
   { id: 'tesla-route-completed', filter: ['==', ['get', 'part'], 'completed'], paint: { 'line-color': '#87939d', 'line-width': width(3, 4.5, 6.5), 'line-opacity': 0.5 } },
-  { id: 'tesla-route-casing', filter: ['==', ['get', 'part'], 'remaining'], paint: { 'line-color': '#114b91', 'line-width': width(6, 8.5, 12), 'line-opacity': 0.85 } },
-  { id: 'tesla-route-remaining', filter: ['==', ['get', 'part'], 'remaining'], paint: { 'line-color': '#2685ef', 'line-width': width(4, 6, 9) } }
+  { id: 'tesla-route-casing', filter: ['==', ['get', 'part'], 'remaining'], paint: { 'line-color': '#114b91', 'line-width': width(6, 8.5, 14), 'line-opacity': 0.85 } },
+  { id: 'tesla-route-remaining', filter: ['==', ['get', 'part'], 'remaining'], paint: { 'line-color': '#2685ef', 'line-width': width(4, 6, 11) } }
 ];
 function rasterWidth(expression, zoom) {
   const stops = expression.slice(3);

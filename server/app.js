@@ -7,6 +7,7 @@ import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { fileURLToPath } from 'node:url';
 import { logger as defaultLogger, errorDetails } from './logger.js';
 import { runningVersion } from './version.js';
+import { resolveExpiration } from '../public/expiration.js';
 const publicDir = fileURLToPath(new URL('../public/', import.meta.url));
 export function createApp({ telemetry, store, config, verifyAdmin, connection, logger = defaultLogger }) {
   const app = express();
@@ -15,7 +16,7 @@ export function createApp({ telemetry, store, config, verifyAdmin, connection, l
   app.disable('x-powered-by');
   app.use((req, res, next) => {
     res.set({ 'Cache-Control': 'no-store', 'Referrer-Policy': 'strict-origin', 'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY',
-      'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org https://vector.openstreetmap.org; connect-src 'self' https://vector.openstreetmap.org; font-src 'self' data: https://vector.openstreetmap.org; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'", 'Permissions-Policy': 'geolocation=(), camera=(), microphone=()' });
+      'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org https://vector.openstreetmap.org; connect-src 'self' https://vector.openstreetmap.org https://api.github.com; font-src 'self' data: https://vector.openstreetmap.org; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'", 'Permissions-Policy': 'geolocation=(), camera=(), microphone=()' });
     next();
   });
   app.use(express.json({ limit: '24kb' }));
@@ -64,18 +65,19 @@ export function createApp({ telemetry, store, config, verifyAdmin, connection, l
     res.json({ url: `${sharingOrigin()}/s/${token}` });
   });
   app.post('/admin/api/shares', (req, res) => {
-    const { carId, label = '', hours, expiresAt } = req.body || {};
+    const { carId, label = '' } = req.body || {};
     const now = Date.now();
-    const expiry = expiresAt !== undefined ? expiresAt : Number.isFinite(hours) && hours >= 1 / 60 ? now + hours * 3600000 : null;
-    if (typeof carId !== 'string' || !telemetry.cars.has(carId) || typeof label !== 'string' || label.length > 100 || !Number.isSafeInteger(expiry) || expiry <= now || expiry > now + 168 * 3600000) return res.status(400).json({ error: 'Choose a vehicle and an expiration in the future, up to 7 days from now. Link names must be 100 characters or fewer.' });
+    const { expiresAt: expiry, error } = resolveExpiration(req.body, now);
+    if (typeof carId !== 'string' || !telemetry.cars.has(carId) || typeof label !== 'string' || label.length > 100) return res.status(400).json({ error: 'Choose a vehicle. Link names must be 100 characters or fewer.' });
+    if (error) return res.status(400).json({ error });
     const share = store.create(carId, label.trim(), (expiry - now) / 3600000, now);
     logger.info('Sharing link created', { linkId: share.id });
     res.status(201).json({ ...share, url: `${sharingOrigin()}/s/${share.token}` });
   });
   app.patch('/admin/api/shares/:id/expiration', (req, res) => {
-    const { hours, expiresAt } = req.body || {}, now = Date.now();
-    const expiry = expiresAt !== undefined ? expiresAt : Number.isFinite(hours) && hours >= 1 / 60 ? now + hours * 3600000 : null;
-    if (!Number.isSafeInteger(expiry) || expiry <= now || expiry > now + 168 * 3600000) return res.status(400).json({ error: 'Choose an expiration in the future, up to 7 days from now.' });
+    const now = Date.now();
+    const { expiresAt: expiry, error } = resolveExpiration(req.body, now);
+    if (error) return res.status(400).json({ error });
     const share = store.updateExpiration(req.params.id, expiry, now);
     if (!share) return res.status(404).json({ error: 'This link was removed or is no longer available to restore.' });
     logger.info(share.restored ? 'Sharing link restored' : 'Sharing link expiration changed', { linkId: share.id });
@@ -101,6 +103,8 @@ export function createApp({ telemetry, store, config, verifyAdmin, connection, l
   app.get('/assets/map-follow.js', (req, res) => res.sendFile(`${publicDir}map-follow.js`));
   app.get('/assets/route-line.js', (req, res) => res.sendFile(`${publicDir}route-line.js`));
   app.get('/assets/route-line-layer.js', (req, res) => res.sendFile(`${publicDir}route-line-layer.js`));
+  app.get('/assets/expiration.js', (req, res) => res.sendFile(`${publicDir}expiration.js`));
+  app.get('/assets/updates.js', (req, res) => res.sendFile(`${publicDir}updates.js`));
   app.get('/assets/vector-map.js', (req, res) => res.sendFile(`${publicDir}vector-map.js`));
   app.get('/assets/viewer.js', (req, res) => res.sendFile(`${publicDir}viewer.js`));
   app.get('/favicon.svg', (req, res) => res.sendFile(`${publicDir}favicon.svg`));

@@ -1,9 +1,12 @@
 import { followFleetLocations, safeFitPadding } from '/assets/map-follow.js';
 import { createVectorMap, vectorMarker, vectorMapEnabled } from '/assets/vector-map.js';
+import { resolveExpiration } from '/assets/expiration.js';
+import { checkForUpdates } from '/assets/updates.js';
 const $ = id => document.getElementById(id);
 const vector = vectorMapEnabled();
 let displayedShareId = null;
 let mqttTransport = 'mqtt';
+let updateChecked = false;
 const shareUrls = new Map();
 const fleetMarkers = new Map();
 const fleetMarkerStyles = new Map();
@@ -22,8 +25,6 @@ function expirationPicker(container, expiresAt) {
     return new Date(timestamp - value.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
   };
   date.value = localDate(expiresAt ?? Date.now() + 4 * 3600000);
-  date.min = localDate(Math.ceil((Date.now() + 60000) / 60000) * 60000);
-  date.max = localDate(Date.now() + 7 * 86400000);
   if (expiresAt) mode.value = 'date';
   const read = () => mode.value === 'date' ? { expiresAt: new Date(date.value).getTime() } : {
     hours: mode.value === 'custom' ? Number(duration.value) * ({ minutes: 1 / 60, hours: 1, days: 24 }[unit.value]) : Number(mode.value)
@@ -49,13 +50,17 @@ function expirationPicker(container, expiresAt) {
   container.oninput = update;
   container.onchange = update;
   update();
-  return { read, update };
+  return { read, update, validate: () => resolveExpiration(read()).error };
 }
 const createExpiration = expirationPicker($('expiration-control'));
 let editExpiration, editingShareId;
 $('cancel-expiration').onclick = () => $('edit-expiration').close();
 $('edit-expiration-form').onsubmit = async event => {
-  event.preventDefault(); $('save-expiration').disabled = true;
+  event.preventDefault();
+  const error = editExpiration.validate();
+  $('edit-expiration-message').textContent = error || '';
+  if (error) return;
+  $('save-expiration').disabled = true;
   try {
     await api(`shares/${editingShareId}/expiration`, { method: 'PATCH', body: JSON.stringify(editExpiration.read()) });
     $('edit-expiration').close(); await refresh();
@@ -200,6 +205,17 @@ async function refresh() {
       versionElement.textContent = `Version ${version.commit.slice(0, 7)}`;
       versionElement.href = `https://github.com/DennisGarvey/TeslaETA/commit/${version.commit}`;
       versionElement.title = version.commit;
+      if (!updateChecked) {
+        updateChecked = true;
+        checkForUpdates(version.commit).then(update => {
+          const notice = $('update-available');
+          notice.hidden = !update.available;
+          if (update.available) {
+            notice.href = `https://github.com/DennisGarvey/TeslaETA/compare/${version.commit}...${update.latestCommit}`;
+            notice.title = `Latest published build: ${update.latestCommit.slice(0, 7)}`;
+          }
+        }).catch(() => { $('update-available').hidden = true; });
+      }
     } else {
       versionElement.textContent = '';
       versionElement.removeAttribute('href');
@@ -281,7 +297,11 @@ async function refresh() {
   } catch (error) { $('message').textContent = error.message; }
 }
 $('share-form').onsubmit = async event => {
-  event.preventDefault(); $('create').disabled = true;
+  event.preventDefault();
+  const error = createExpiration.validate();
+  $('message').classList.toggle('form-error', !!error);
+  if (error) { $('message').textContent = error; return; }
+  $('create').disabled = true;
   try { const share = await api('shares', { method: 'POST', body: JSON.stringify({ carId: $('car').value, label: $('label').value, ...createExpiration.read() }) }); shareUrls.set(share.id, share.url); displayLink(share.id, share.url); $('message').textContent = 'Sharing link created.'; $('label').value = ''; await refresh(); }
   catch (error) { $('message').textContent = error.message; }
   finally { $('create').disabled = !$('car').options.length; }

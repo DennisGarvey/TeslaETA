@@ -3,6 +3,17 @@ import assert from 'node:assert/strict';
 import { Store } from '../server/store.js';
 import { Telemetry } from '../server/telemetry.js';
 import { createApp } from '../server/app.js';
+import { resolveExpiration } from '../public/expiration.js';
+
+test('browser and server share validation without imposing an extra date offset', () => {
+  const now = 1000000;
+  assert.deepEqual(resolveExpiration({ expiresAt: now + 1 }, now), { expiresAt: now + 1, error: null });
+  assert.deepEqual(resolveExpiration({ hours: 1 / 60 }, now), { expiresAt: now + 60000, error: null });
+  assert.deepEqual(resolveExpiration({ hours: 168 }, now), { expiresAt: now + 7 * 86400000, error: null });
+  for (const input of [{ expiresAt: now }, { expiresAt: now - 1 }, { expiresAt: NaN }, { expiresAt: null }, { hours: 0 }, { hours: -1 }, { hours: 169 }, {}]) {
+    assert.ok(resolveExpiration(input, now).error);
+  }
+});
 
 test('custom durations, explicit dates and active-link edits preserve tokens and reject invalid expirations', async () => {
   const store = new Store(':memory:'), telemetry = new Telemetry();

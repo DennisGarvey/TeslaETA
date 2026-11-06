@@ -64,11 +64,22 @@ export function createApp({ telemetry, store, config, verifyAdmin, connection, l
     res.json({ url: `${sharingOrigin()}/s/${token}` });
   });
   app.post('/admin/api/shares', (req, res) => {
-    const { carId, label = '', hours } = req.body || {};
-    if (typeof carId !== 'string' || !telemetry.cars.has(carId) || typeof label !== 'string' || label.length > 100 || !Number.isFinite(hours) || hours < 1 || hours > 168) return res.status(400).json({ error: 'Choose a vehicle and an expiry between 1 and 168 hours. Link names must be 100 characters or fewer.' });
-    const share = store.create(carId, label.trim(), hours);
+    const { carId, label = '', hours, expiresAt } = req.body || {};
+    const now = Date.now();
+    const expiry = expiresAt !== undefined ? expiresAt : Number.isFinite(hours) && hours >= 1 / 60 ? now + hours * 3600000 : null;
+    if (typeof carId !== 'string' || !telemetry.cars.has(carId) || typeof label !== 'string' || label.length > 100 || !Number.isSafeInteger(expiry) || expiry <= now || expiry > now + 168 * 3600000) return res.status(400).json({ error: 'Choose a vehicle and an expiration in the future, up to 7 days from now. Link names must be 100 characters or fewer.' });
+    const share = store.create(carId, label.trim(), (expiry - now) / 3600000, now);
     logger.info('Sharing link created', { linkId: share.id });
     res.status(201).json({ ...share, url: `${sharingOrigin()}/s/${share.token}` });
+  });
+  app.patch('/admin/api/shares/:id/expiration', (req, res) => {
+    const { hours, expiresAt } = req.body || {}, now = Date.now();
+    const expiry = expiresAt !== undefined ? expiresAt : Number.isFinite(hours) && hours >= 1 / 60 ? now + hours * 3600000 : null;
+    if (!Number.isSafeInteger(expiry) || expiry <= now || expiry > now + 168 * 3600000) return res.status(400).json({ error: 'Choose an expiration in the future, up to 7 days from now.' });
+    const share = store.updateExpiration(req.params.id, expiry, now);
+    if (!share) return res.status(404).json({ error: 'This link was removed or is no longer available to restore.' });
+    logger.info(share.restored ? 'Sharing link restored' : 'Sharing link expiration changed', { linkId: share.id });
+    res.json({ id: share.id, expiresAt: share.expires_at });
   });
   app.delete('/admin/api/shares/:id', (req, res) => {
     const share = store.revoke(req.params.id);

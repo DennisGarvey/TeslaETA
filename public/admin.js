@@ -13,6 +13,55 @@ const fleetArrow = heading => L.divIcon({ className: 'vehicle-marker fleet-arrow
 const fleetNumber = number => L.divIcon({ className: 'fleet-icon', iconSize: [30, 30], iconAnchor: [15, 15], html: `<span>${number}</span>` });
 const shareIcon = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3m0 0 4 4m-4-4L8 7M5 11v9h14v-9"/></svg>';
 $('share').innerHTML = shareIcon;
+function expirationPicker(container, expiresAt) {
+  container.innerHTML = '<label>Expiration<select class="expiration-mode"><option value="1">1 hour</option><option value="4" selected>4 hours</option><option value="12">12 hours</option><option value="24">1 day</option><option value="168">7 days</option><option value="custom">Custom duration</option><option value="date">Specific date and time</option></select></label><div class="duration-fields" hidden><input class="duration-value" type="number" min="1" placeholder="Duration" aria-label="Duration" step="1"><select class="duration-unit" aria-label="Duration unit"><option value="minutes">Minutes</option><option value="hours">Hours</option><option value="days">Days</option></select></div><div class="expiration-date-field" hidden><input class="expiration-date" type="datetime-local" aria-label="End time"></div><p class="expiration-summary muted"></p>';
+  const mode = container.querySelector('.expiration-mode'), duration = container.querySelector('.duration-value');
+  const unit = container.querySelector('.duration-unit'), date = container.querySelector('.expiration-date');
+  const localDate = timestamp => {
+    const value = new Date(timestamp);
+    return new Date(timestamp - value.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  };
+  date.value = localDate(expiresAt ?? Date.now() + 4 * 3600000);
+  date.min = localDate(Math.ceil((Date.now() + 60000) / 60000) * 60000);
+  date.max = localDate(Date.now() + 7 * 86400000);
+  if (expiresAt) mode.value = 'date';
+  const read = () => mode.value === 'date' ? { expiresAt: new Date(date.value).getTime() } : {
+    hours: mode.value === 'custom' ? Number(duration.value) * ({ minutes: 1 / 60, hours: 1, days: 24 }[unit.value]) : Number(mode.value)
+  };
+  function update() {
+    const custom = mode.value === 'custom', specific = mode.value === 'date';
+    container.querySelector('.duration-fields').hidden = !custom;
+    container.querySelector('.expiration-date-field').hidden = !specific;
+    duration.disabled = !custom; unit.disabled = !custom; date.disabled = !specific;
+    duration.required = custom; date.required = specific;
+    duration.max = { minutes: 10080, hours: 168, days: 7 }[unit.value];
+    const value = read(), end = value.expiresAt ?? Date.now() + value.hours * 3600000;
+    const remainingMinutes = Math.max(0, Math.ceil((end - Date.now()) / 60000));
+    const parts = [];
+    let minutes = remainingMinutes;
+    for (const [unitMinutes, name] of [[1440, 'day'], [60, 'hour'], [1, 'minute']]) {
+      const value = Math.floor(minutes / unitMinutes); minutes %= unitMinutes;
+      if (value) parts.push(`${value} ${name}${value === 1 ? '' : 's'}`);
+    }
+    const remaining = end <= Date.now() ? 'in the past' : `in ${parts.join(' ') || 'less than a minute'}`;
+    container.querySelector('.expiration-summary').textContent = custom && !duration.value ? '' : Number.isFinite(end) ? `Ends ${new Date(end).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}${specific ? ` · ${remaining}` : ''}` : 'Choose an end time.';
+  }
+  container.oninput = update;
+  container.onchange = update;
+  update();
+  return { read, update };
+}
+const createExpiration = expirationPicker($('expiration-control'));
+let editExpiration, editingShareId;
+$('cancel-expiration').onclick = () => $('edit-expiration').close();
+$('edit-expiration-form').onsubmit = async event => {
+  event.preventDefault(); $('save-expiration').disabled = true;
+  try {
+    await api(`shares/${editingShareId}/expiration`, { method: 'PATCH', body: JSON.stringify(editExpiration.read()) });
+    $('edit-expiration').close(); await refresh();
+  } catch (error) { $('edit-expiration-message').textContent = error.message; }
+  finally { $('save-expiration').disabled = false; }
+};
 function displayLink(id, url) {
   displayedShareId = id;
   $('created').hidden = false;
@@ -141,6 +190,8 @@ async function api(path, options = {}) {
 }
 async function refresh() {
   try {
+    createExpiration.update();
+    if ($('edit-expiration').open) editExpiration?.update();
     const [status, shares] = await Promise.all([api('status'), api('shares')]);
     const version = status.version;
     const versionElement = $('app-version');
@@ -183,10 +234,26 @@ async function refresh() {
       setViewerCount(count, share.id);
       detail.append(title, meta, count);
       const revoke = document.createElement('button'); revoke.className = 'secondary'; revoke.textContent = expired ? 'Remove' : 'Revoke';
+      revoke.dataset.action = 'revoke';
       revoke.onclick = async () => { revoke.disabled = true; try { await api(`shares/${share.id}`, { method: 'DELETE' }); await refresh(); } catch (error) { $('message').textContent = error.message; revoke.disabled = false; } };
       const actions = document.createElement('div'); actions.className = 'share-actions';
+      {
+        const edit = document.createElement('button'); edit.type = 'button'; edit.className = 'expiration-link'; edit.textContent = meta.textContent.split(' · ')[0]; edit.title = expired ? 'Restore Link' : 'Edit Expiration';
+        edit.dataset.action = 'expiration';
+        edit.onclick = () => {
+          editingShareId = share.id;
+          $('edit-expiration-title').textContent = expired ? 'Restore Link' : 'Edit Expiration';
+          $('save-expiration').textContent = expired ? 'Restore' : 'Save';
+          $('edit-link-name').textContent = share.label;
+          $('edit-expiration-message').textContent = '';
+          editExpiration = expirationPicker($('edit-expiration-control'), expired ? undefined : share.expires_at);
+          $('edit-expiration').showModal();
+        };
+        meta.replaceChildren(edit, document.createTextNode(` · ${vehicleNames.get(share.car_id) || 'Vehicle name unavailable'}`));
+      }
       if (share.recoverable && !expired) {
         const copy = document.createElement('button'); copy.className = 'secondary'; copy.textContent = 'Copy link';
+        copy.dataset.action = 'copy';
         copy.onclick = async () => {
           copy.disabled = true;
           try {
@@ -200,6 +267,7 @@ async function refresh() {
         actions.append(copy);
         if (url) {
           const shareButton = document.createElement('button'); shareButton.className = 'secondary icon-button';
+          shareButton.dataset.action = 'share';
           shareButton.type = 'button'; shareButton.setAttribute('aria-label', 'Share link'); shareButton.title = 'Share link'; shareButton.innerHTML = shareIcon;
           shareButton.onclick = () => shareLink(url, share.id);
           actions.append(shareButton);
@@ -214,7 +282,7 @@ async function refresh() {
 }
 $('share-form').onsubmit = async event => {
   event.preventDefault(); $('create').disabled = true;
-  try { const share = await api('shares', { method: 'POST', body: JSON.stringify({ carId: $('car').value, label: $('label').value, hours: Number($('hours').value) }) }); shareUrls.set(share.id, share.url); displayLink(share.id, share.url); $('message').textContent = 'Sharing link created.'; $('label').value = ''; await refresh(); }
+  try { const share = await api('shares', { method: 'POST', body: JSON.stringify({ carId: $('car').value, label: $('label').value, ...createExpiration.read() }) }); shareUrls.set(share.id, share.url); displayLink(share.id, share.url); $('message').textContent = 'Sharing link created.'; $('label').value = ''; await refresh(); }
   catch (error) { $('message').textContent = error.message; }
   finally { $('create').disabled = !$('car').options.length; }
 };

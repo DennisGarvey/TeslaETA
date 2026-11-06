@@ -13,7 +13,7 @@ export function streamShare(req, res, { telemetry, store, config, viewers }) {
     clearTimeout(pending); clearInterval(heartbeat); clearTimeout(drainTimeout);
     res.off('drain', onDrain);
     telemetry.off('update', onUpdate); telemetry.off('connection', schedule);
-    store.off('revoke', checkAccess);
+    store.off('revoke', checkAccess); store.off('expiration', schedule);
     leave?.();
   }
   function end() { if (!closed) { res.write('event: ended\ndata: {}\n\n'); cleanup(); res.end(); } }
@@ -52,6 +52,7 @@ export function streamShare(req, res, { telemetry, store, config, viewers }) {
   leave = viewers?.join(initial.id);
   telemetry.on('update', onUpdate); telemetry.on('connection', schedule);
   store.on('revoke', checkAccess);
+  store.on('expiration', schedule);
   // Check expiry every second, refresh age-based states and keep proxies alive
   // every 15 seconds, even when the vehicle publishes nothing.
   let ticks = 0;

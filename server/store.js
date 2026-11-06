@@ -82,6 +82,13 @@ export class Store extends EventEmitter {
   }
   resolve(token, now = Date.now()) { return this.db.prepare('SELECT id, car_id, expires_at FROM shares WHERE token_hash = ? AND expires_at > ?').get(hash(token), now); }
   list() { return this.db.prepare('SELECT id, car_id, label, expires_at, created_at, encrypted_token IS NOT NULL AS recoverable FROM shares ORDER BY created_at DESC').all(); }
+  updateExpiration(id, expiresAt, now = Date.now()) {
+    const previous = this.db.prepare('SELECT expires_at FROM shares WHERE id = ?').get(id);
+    const row = this.db.prepare('UPDATE shares SET expires_at = ? WHERE id = ? AND expires_at > ? RETURNING id, expires_at').get(expiresAt, id, now - expiredLinkRetentionMs);
+    if (row) row.restored = previous.expires_at <= now;
+    if (row) this.emit('expiration');
+    return row;
+  }
   pruneExpired(now = Date.now()) { return this.db.prepare('DELETE FROM shares WHERE expires_at <= ?').run(now - expiredLinkRetentionMs).changes; }
   revoke(id) {
     const share = this.db.prepare('DELETE FROM shares WHERE id = ? RETURNING id, expires_at').get(id);

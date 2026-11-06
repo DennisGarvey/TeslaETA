@@ -18,7 +18,7 @@ export class Telemetry extends EventEmitter {
     if (!match) return;
     const [, id, topicField] = match;
     const field = topicField === 'RouteLine' ? 'route_line' : topicField;
-    if (!['display_name','state','healthy','speed','heading','battery_level','location','active_route','route_line'].includes(field) || payload.length > (field === 'route_line' ? routeLineMaxBytes + 2 : 16384)) return;
+    if (!['display_name','vin','state','healthy','speed','heading','battery_level','location','active_route','route_line'].includes(field) || payload.length > (field === 'route_line' ? routeLineMaxBytes + 2 : 16384)) return;
     let value = payload.toString();
     if (['location','active_route'].includes(field)) { try { value = JSON.parse(value); } catch { return; } }
     const car = this.cars.get(id) || { id, fields: {} };
@@ -33,6 +33,7 @@ export class Telemetry extends EventEmitter {
     if (field === 'heading') value = bounded(value, 0, 360);
     if (field === 'battery_level') value = bounded(value, 0, 100);
     if (field === 'healthy') value = value === 'true';
+    if (field === 'vin') { value = value.trim().toUpperCase(); value = /^[A-HJ-NPR-Z0-9]{17}$/.test(value) ? value : null; }
     if (field === 'display_name' || field === 'state') value = value.slice(0, 100);
     if (field === 'active_route') value = value && !value.error && location(value.location) ? {
       destination: String(value.destination || 'Destination').slice(0, 200), location: location(value.location),
@@ -77,6 +78,9 @@ export class Telemetry extends EventEmitter {
     }
     this.cars.set(id, car);
     this.emit('update', id);
+  }
+  adminSnapshot(id) {
+    return { ...this.snapshot(id), vin: this.cars.get(id)?.fields.vin?.value ?? null };
   }
   snapshot(id, now = Date.now()) {
     const car = this.cars.get(id);

@@ -4,6 +4,18 @@ import { Telemetry } from '../server/telemetry.js';
 import { Store } from '../server/store.js';
 import { createApp } from '../server/app.js';
 const route = { destination: 'Home', minutes_to_arrival: 20, miles_to_arrival: 5, location: { latitude: 40, longitude: -74 } };
+test('VIN updates remain scoped to the vehicle and private to administration', () => {
+  const telemetry = new Telemetry();
+  const vin = '5YJ3E1EA7KF000001';
+  telemetry.ingest('teslamate/cars/1/vin', Buffer.from(` ${vin.toLowerCase()} `), true);
+  assert.equal(telemetry.adminSnapshot('1').vin, vin);
+  assert.equal(telemetry.adminSnapshot('2').vin, null);
+  assert.equal(Object.hasOwn(telemetry.snapshot('1'), 'vin'), false);
+  telemetry.ingest('teslamate/cars/1/vin', Buffer.alloc(0));
+  assert.equal(telemetry.adminSnapshot('1').vin, null);
+  telemetry.ingest('teslamate/cars/1/vin', Buffer.from('<invalid>'));
+  assert.equal(telemetry.adminSnapshot('1').vin, null);
+});
 test('retained data is not live; ETA anchored to route update; clear route and stale handling', () => {
   const t = new Telemetry(); t.connected = true;
   t.ingest('teslamate/cars/1/active_route', Buffer.from(JSON.stringify(route)), true, 1000);

@@ -37,8 +37,8 @@ export function streamViewers(req, res, viewers, telemetry, configured) {
     pendingVehicles = null;
     if (closed) return;
     const cars = [...telemetry.cars.keys()].map(id => {
-      const { name, state, speed, speedFresh, location, locationFresh, locationLiveAt, heading } = telemetry.snapshot(id);
-      return { id, name, state, speed, speedFresh, location, locationFresh, locationLiveAt, heading };
+      const { name, vin, state, speed, speedFresh, location, locationFresh, locationLiveAt, heading } = telemetry.adminSnapshot(id);
+      return { id, name, vin, state, speed, speedFresh, location, locationFresh, locationLiveAt, heading };
     });
     if (!res.write(`event: vehicles\ndata: ${JSON.stringify(cars)}\n\n`)) { cleanup(); res.end(); }
   }

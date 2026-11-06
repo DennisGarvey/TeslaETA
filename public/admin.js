@@ -3,6 +3,7 @@ import { createVectorMap, vectorMarker, vectorMapEnabled } from '/assets/vector-
 const $ = id => document.getElementById(id);
 const vector = vectorMapEnabled();
 let displayedShareId = null;
+let mqttTransport = 'mqtt';
 const shareUrls = new Map();
 const fleetMarkers = new Map();
 const fleetMarkerStyles = new Map();
@@ -39,7 +40,7 @@ function renderFleet(cars) {
     carOptionsKey = nextOptionsKey;
   }
   $('create').disabled = !latestCars.length;
-  const nextRowsKey = JSON.stringify(latestCars.map(car => [car.id, car.name, car.state, car.speed, car.speedFresh, !!car.location, car.locationFresh, car.locationLiveAt]));
+  const nextRowsKey = JSON.stringify(latestCars.map(car => [car.id, car.name, car.vin, car.state, car.speed, car.speedFresh, !!car.location, car.locationFresh, car.locationLiveAt]));
   if (nextRowsKey !== fleetRowsKey) {
   const rows = latestCars.map((car, index) => {
     const row = document.createElement('button'); row.type = 'button'; row.className = 'fleet-vehicle'; row.dataset.carId = car.id;
@@ -55,7 +56,12 @@ function renderFleet(cars) {
     state.textContent = `${stateLabel}${drivingSpeed}`;
     const location = document.createElement('p'); location.className = 'muted';
     location.textContent = !car.location ? 'Location unavailable' : car.locationFresh && car.locationLiveAt ? `Location received ${new Date(car.locationLiveAt).toLocaleTimeString()}` : 'Last known location';
-    details.append(name, state, location); row.append(number, details);
+    details.append(name);
+    if (car.vin) {
+      const vin = document.createElement('span'); vin.className = 'fleet-vin'; vin.textContent = car.vin;
+      details.append(vin);
+    }
+    details.append(state, location); row.append(number, details);
     return row;
   });
   if (rows.length) $('fleet-list').replaceChildren(...rows);
@@ -236,14 +242,15 @@ window.addEventListener('pageshow', event => { if (event.persisted) location.rel
 refresh(); setInterval(refresh, 15000);
 
 function connectionFields() {
-  const websocket = $('transport').value === 'websocket';
+  const websocket = mqttTransport === 'websocket';
+  $('transport').hidden = !websocket;
   $('cloudflare-option').hidden = !websocket;
   if (!websocket) $('cloudflare-enabled').checked = false;
   $('cloudflare-fields').hidden = !$('cloudflare-enabled').checked;
-  $('mqtt-url').placeholder = websocket ? 'wss://mqtt.example.com/mqtt' : 'mqtt://broker:1883';
+  $('mqtt-url').placeholder = websocket ? 'wss://mqtt.example.com/mqtt' : 'mqtt://mqtt-broker.example.com:1883';
 }
 function showConnection(settings) {
-  $('transport').value = settings.transport || 'websocket'; $('mqtt-url').value = settings.url || '';
+  mqttTransport = settings.url ? (settings.transport || 'mqtt') : 'mqtt'; $('mqtt-url').value = settings.url || '';
   $('mqtt-user').value = settings.username || ''; $('cloudflare-enabled').checked = !!settings.cloudflare;
   for (const id of ['mqtt-password', 'cf-client-id', 'cf-client-secret']) $(id).value = '';
   $('mqtt-password').placeholder = '';
@@ -257,7 +264,9 @@ function showConnection(settings) {
   $('connection-message').textContent = '';
   connectionFields();
 }
-async function selectPanel(active) {
+async function selectPanel(active, updateUrl = true) {
+  if (!['sharing', 'map', 'settings'].includes(active)) active = 'sharing';
+  if (updateUrl && location.hash !== `#${active}`) history.pushState(null, '', `#${active}`);
   for (const name of ['sharing', 'map', 'settings']) {
     $(name + '-panel').hidden = name !== active;
     $(name + '-tab').setAttribute('aria-pressed', String(name === active));
@@ -287,18 +296,17 @@ $('mqtt-alert-settings').onclick = async () => {
 };
 function detectTransport() {
   const protocol = $('mqtt-url').value.trim().match(/^([a-z]+):\/\//i)?.[1].toLowerCase();
-  if (['ws', 'wss', 'http', 'https'].includes(protocol)) $('transport').value = 'websocket';
-  else if (['mqtt', 'mqtts'].includes(protocol)) $('transport').value = 'mqtt';
+  if (['ws', 'wss', 'http', 'https'].includes(protocol)) mqttTransport = 'websocket';
+  else if (['mqtt', 'mqtts'].includes(protocol) || !$('mqtt-url').value.trim()) mqttTransport = 'mqtt';
   connectionFields();
 }
 $('mqtt-url').addEventListener('input', detectTransport);
-$('transport').onchange = detectTransport;
 $('cloudflare-enabled').onchange = connectionFields;
 $('connection-form').onsubmit = async event => {
   event.preventDefault(); detectTransport(); $('save-connection').disabled = true;
   try {
     const settings = await api('connection', { method: 'PUT', body: JSON.stringify({
-      transport: $('transport').value, url: $('mqtt-url').value, username: $('mqtt-user').value,
+      transport: mqttTransport, url: $('mqtt-url').value, username: $('mqtt-user').value,
       password: $('mqtt-password').value, clearPassword: $('clear-password').checked,
       cloudflare: $('cloudflare-enabled').checked, clientId: $('cf-client-id').value, clientSecret: $('cf-client-secret').value
     }) });
@@ -306,3 +314,5 @@ $('connection-form').onsubmit = async event => {
   } catch (error) { $('connection-message').textContent = error.message; }
   finally { $('save-connection').disabled = false; }
 };
+window.addEventListener('hashchange', () => selectPanel(location.hash.slice(1), false));
+selectPanel(location.hash.slice(1), false);

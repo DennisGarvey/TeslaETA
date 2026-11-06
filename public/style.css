@@ -28,7 +28,7 @@
 .connection-panel{max-width:850px}.connection-panel form{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:18px}
 .check-label{display:flex;align-items:center;gap:8px;font-weight:400}.check-label input{width:16px;height:16px;margin:0}
 .cloudflare-fields{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:16px}.cloudflare-fields p{grid-column:1/-1;margin:0}
-.connection-note{grid-column:1/-1;margin:0}#connection-message{font-size:14px}#save-connection{justify-self:start}
+.connection-note{grid-column:1/-1;margin:0}#connection-message{font-size:14px}#save-connection{grid-column:1/-1;justify-self:start}
 @media(max-width:540px){.connection-panel form,.cloudflare-fields{grid-template-columns:1fr}.connection-panel{padding:16px}.admin{padding:20px 16px}.admin h1{font-size:24px}}
 
 .admin-page .admin{height:calc(100dvh - 60px);display:flex;flex-direction:column;padding-top:22px;padding-bottom:22px;overflow:hidden}
@@ -80,7 +80,7 @@ a.share-title:hover{text-decoration-color:currentColor}
 .connection-layout{display:grid;grid-template-columns:minmax(340px,400px) minmax(0,1fr);gap:24px;align-items:start}
 .connection-settings{min-width:0}
 .admin-page .connection-panel .connection-settings form{grid-template-columns:1fr 1fr}
-#connection-form>label:first-child,#connection-form>.mqtt-url-field,#cloudflare-option{grid-column:1/-1}
+#connection-form>.mqtt-url-field,#cloudflare-option{grid-column:1/-1}
 .fleet-panel{min-width:0}
 .fleet-heading{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:12px}
 .fleet-heading h3{font-size:16px;font-weight:600;margin:0}
@@ -165,7 +165,7 @@ a.share-title:hover{text-decoration-color:currentColor}
 @media(forced-colors:active){.theme-dark select{background-image:none}}
 .mqtt-url-field{display:grid;gap:9px;min-width:0}
 .mqtt-url-title{display:flex;align-items:center;gap:6px;min-width:0}
-.mqtt-url-title label{font-size:14px;font-weight:550}
+.mqtt-url-title label{display:block;font-size:14px;font-weight:550}
 .mqtt-info{position:relative;display:inline-flex;align-items:center}
 .mqtt-info-trigger,.theme-dark .mqtt-info-trigger{display:grid;place-items:center;width:16px;height:16px;padding:0;border:1px solid #647478;border-radius:50%;background:transparent;color:#526366;font-size:11px;font-weight:700;line-height:1}
 .mqtt-info-trigger:hover:not(:disabled){filter:none;background:#edf1f2}
@@ -211,4 +211,10 @@ a.share-title:hover{text-decoration-color:currentColor}
 .admin-page #map-panel .fleet-list{max-height:none;overflow:visible}
 .admin-page #map-panel .fleet-map-wrap{min-height:390px}
 
-.admin-root{scrollbar-gutter:stable}
+.admin-root{scrollbar-gutter:stable;overflow-anchor:none}
+
+.transport-hint{font-weight:400;color:#647478}
+.theme-dark .transport-hint{color:#b5b5ba}
+
+.fleet-vin{display:block;margin-top:4px;font-size:11px;line-height:1.4;color:#647478;overflow-wrap:anywhere}
+.theme-dark .fleet-vin{color:#b5b5ba}

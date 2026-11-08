@@ -203,7 +203,7 @@ a.share-title:hover{text-decoration-color:currentColor}
 .settings-grid>.panel{flex:none;width:100%}
 .admin-page .settings-grid .connection-panel{max-width:none;overflow:visible}
 .about-links{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px}
-.version-info{display:flex;align-items:center;flex-wrap:wrap;gap:10px;font-size:13px}
+.version-info{display:flex;align-items:center;gap:10px;margin-left:auto;font-size:13px}
 .admin-nav{overflow-x:auto}.admin-nav button{white-space:nowrap;flex-shrink:0}
 .admin-page .admin{height:auto;min-height:calc(100dvh - 60px);overflow:visible}
 .admin-page .admin-grid,.admin-page #settings-panel{overflow:visible;flex:none}
@@ -240,7 +240,7 @@ a.share-title:hover{text-decoration-color:currentColor}
 
 .share-row button.expiration-link,.theme-dark .share-row button.expiration-link{padding:0;border:0;border-radius:0;background:transparent;color:inherit;font:inherit;text-align:left;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px}
 .share-row button.expiration-link:hover:not(:disabled){filter:none;text-decoration-style:solid}
-.about-links a.update-notice{order:-1;font-size:12px;padding:3px 7px;border-radius:4px;background:#f3edda;color:#765c16}
+.about-links a.update-notice{font-size:12px;padding:3px 7px;border-radius:4px;background:#f3edda;color:#765c16}
 .theme-dark .about-links a.update-notice{background:#3c3421;color:#e7c974}
 .form-error{color:#a32f28}
 .theme-dark .form-error{color:#ef8a82}

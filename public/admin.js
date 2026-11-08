@@ -211,7 +211,7 @@ async function refresh() {
           const notice = $('update-available');
           notice.hidden = !update.available;
           if (update.available) {
-            notice.href = `https://github.com/DennisGarvey/TeslaETA/compare/${version.commit}...${update.latestCommit}`;
+            notice.href = 'https://github.com/DennisGarvey/TeslaETA';
             notice.title = `Latest published build: ${update.latestCommit.slice(0, 7)}`;
           }
         }).catch(() => { $('update-available').hidden = true; });

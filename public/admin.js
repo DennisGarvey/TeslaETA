@@ -199,26 +199,18 @@ async function refresh() {
     if ($('edit-expiration').open) editExpiration?.update();
     const [status, shares] = await Promise.all([api('status'), api('shares')]);
     const version = status.version;
-    const versionElement = $('app-version');
-    versionElement.hidden = !version?.commit;
     if (version?.commit) {
-      versionElement.textContent = `Version ${version.commit.slice(0, 7)}`;
-      versionElement.href = `https://github.com/DennisGarvey/TeslaETA/commit/${version.commit}`;
-      versionElement.title = version.commit;
       if (!updateChecked) {
         updateChecked = true;
         checkForUpdates(version.commit).then(update => {
           const notice = $('update-available');
           notice.hidden = !update.available;
           if (update.available) {
-            notice.href = 'https://github.com/DennisGarvey/TeslaETA';
+            notice.href = 'https://github.com/DennisGarvey/TeslaETA#upgrade';
             notice.title = `Latest published build: ${update.latestCommit.slice(0, 7)}`;
           }
         }).catch(() => { $('update-available').hidden = true; });
       }
-    } else {
-      versionElement.textContent = '';
-      versionElement.removeAttribute('href');
     }
     showMqttConnection(status);
     renderFleet(status.cars);

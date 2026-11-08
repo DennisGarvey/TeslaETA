@@ -39,6 +39,17 @@ Replace the example hostname and Access values. The HTTP endpoint is `http://127
 
 Run one app instance and preserve `/data` during upgrades and backups; it contains the SQLite database and its encryption key. If using Nginx, disable buffering for the viewer and admin event streams.
 
+## Upgrade
+
+From the directory containing your Compose file, pull the latest image and recreate the service:
+
+```bash
+docker pull ghcr.io/dennisgarvey/teslaeta:latest
+docker compose up -d
+```
+
+Keep the existing data volume to preserve settings and sharing links.
+
 ## Connect TeslaMate
 
 Open **`/admin` → MQTT connection** and enter the broker URL:

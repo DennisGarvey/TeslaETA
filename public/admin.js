@@ -199,6 +199,9 @@ async function refresh() {
     if ($('edit-expiration').open) editExpiration?.update();
     const [status, shares] = await Promise.all([api('status'), api('shares')]);
     const version = status.version;
+    const versionElement = $('app-version');
+    versionElement.hidden = !version?.commit;
+    versionElement.textContent = version?.commit ? `Version ${version.commit.slice(0, 7)}` : '';
     if (version?.commit) {
       if (!updateChecked) {
         updateChecked = true;

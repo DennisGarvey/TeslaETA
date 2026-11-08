@@ -240,7 +240,7 @@ a.share-title:hover{text-decoration-color:currentColor}
 .share-row button.expiration-link,.theme-dark .share-row button.expiration-link{padding:0;border:0;border-radius:0;background:transparent;color:inherit;font:inherit;text-align:left;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px}
 .share-row button.expiration-link:hover:not(:disabled){filter:none;text-decoration-style:solid}
 .version-info{display:flex;align-items:center;flex-wrap:wrap;gap:10px}
-.about-links a.update-notice{font-size:12px;padding:3px 7px;border-radius:4px;background:#f3edda;color:#765c16}
+.about-links a.update-notice{order:-1;font-size:12px;padding:3px 7px;border-radius:4px;background:#f3edda;color:#765c16}
 .theme-dark .about-links a.update-notice{background:#3c3421;color:#e7c974}
 .form-error{color:#a32f28}
 .theme-dark .form-error{color:#ef8a82}

@@ -44,7 +44,7 @@ Run one app instance and preserve `/data` during upgrades and backups; it contai
 From the directory containing your Compose file, pull the latest image and recreate the service:
 
 ```bash
-docker pull ghcr.io/dennisgarvey/teslaeta:latest
+docker compose pull
 docker compose up -d
 ```
 

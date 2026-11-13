@@ -18,7 +18,17 @@ const destinationIcon = L.divIcon({ className: 'destination-marker', iconSize: [
 const tracking = followLocations(map,
   () => [...(routeView?.remaining || []), ...[carMarker, destinationMarker].filter(Boolean).map(marker => { const p = marker.getLatLng(); return [p.lat, p.lng]; })],
   points => map.fitBounds(vector ? points : L.latLngBounds(points), { ...safeFitPadding(map.getSize()), maxZoom: points.length > 1 ? 19 : 15, animate: false }), $('fit'));
-$('units').onchange = () => latest && render(latest);
+const unitsKey = 'tesla-eta-units';
+try {
+  const saved = localStorage.getItem(unitsKey);
+  if (saved === 'imperial' || saved === 'metric') $('units').value = saved;
+} catch { /* The selector still works when browser storage is unavailable. */ }
+$('speed-unit').textContent = $('units').value === 'metric' ? 'km/h' : 'mph';
+$('distance-unit').textContent = $('units').value === 'metric' ? 'km remaining' : 'mi remaining';
+$('units').onchange = () => {
+  try { localStorage.setItem(unitsKey, $('units').value); } catch { /* Keep the choice for this page. */ }
+  if (latest) render(latest);
+};
 const number = n => n == null ? '—' : Math.round(n).toString();
 function renderTime() {
   const arrivalAt = latest?.arrivalAt;

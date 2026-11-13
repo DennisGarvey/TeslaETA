@@ -107,6 +107,7 @@ export function createApp({ telemetry, store, config, verifyAdmin, connection, l
   app.get('/assets/updates.js', (req, res) => res.sendFile(`${publicDir}updates.js`));
   app.get('/assets/vector-map.js', (req, res) => res.sendFile(`${publicDir}vector-map.js`));
   app.get('/assets/viewer.js', (req, res) => res.sendFile(`${publicDir}viewer.js`));
+  app.get('/assets/viewer-units.js', (req, res) => res.sendFile(`${publicDir}viewer-units.js`));
   app.get('/favicon.svg', (req, res) => res.sendFile(`${publicDir}favicon.svg`));
   app.get('/apple-touch-icon.png', (req, res) => res.sendFile(`${publicDir}apple-touch-icon.png`));
   app.use('/assets/leaflet', express.static(fileURLToPath(new URL('../node_modules/leaflet/dist/', import.meta.url))));

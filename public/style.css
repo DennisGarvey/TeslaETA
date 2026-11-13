@@ -68,6 +68,7 @@ a.share-title:hover{text-decoration-color:currentColor}
 
 .viewer-page #units{width:68px;height:42px;padding:0 25px 0 8px;background-color:transparent;background-position:right 4px center;border-color:transparent;color:#526366;font-size:16px;font-weight:500}
 .viewer-page #units:hover{background-color:#f4f6f6}
+.viewer-page [data-units-pending]{visibility:hidden}
 
 .connection-panel{max-width:none}
 .connection-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}

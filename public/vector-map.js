@@ -96,12 +96,13 @@ export function createVectorMap(container) {
       for (const event of events.split(' ')) map.on(event, (...args) => {
         // Resize and camera animations also emit movement events. Only actual
         // pointer, touch, keyboard or control input should pause tracking.
-        if (!['dragstart', 'movestart', 'zoomstart'].includes(event) || args[0]?.originalEvent) callback(...args);
+        if (!['dragstart', 'movestart', 'zoomstart', 'pitchstart'].includes(event) || args[0]?.originalEvent) callback(...args);
       });
       return this;
     },
     getSize() { return { x: map.getContainer().clientWidth, y: map.getContainer().clientHeight }; },
     getZoom() { return map.getZoom(); },
+    resetPitch() { if (map.getPitch() !== 0) map.setPitch(0); },
     invalidateSize() { map.resize(); },
     fitBounds(points, options = {}) {
       const { paddingTopLeft = [0, 0], paddingBottomRight = [0, 0], maxZoom = 19 } = options;

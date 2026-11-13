@@ -14,6 +14,8 @@ class MapStub {
   setPaintProperty(id, property, value) { this.paints.push({ id, property, value }); }
   addControl() {}
   getContainer() { return { clientWidth: 900, clientHeight: 600, addEventListener() {}, removeEventListener() {} }; }
+  getPitch() { return this.pitch ?? 0; }
+  setPitch(pitch) { this.pitch = pitch; this.emit('movestart'); this.emit('pitchstart'); }
   fitBounds(bounds) { this.fits.push(bounds.points); this.emit('movestart'); this.emit('zoomstart'); }
   easeTo(options) { this.centers.push(options); this.emit('movestart'); this.emit('zoomstart'); }
   resize() { this.emit('movestart'); this.emit('resize'); this.emit('moveend'); }
@@ -72,6 +74,12 @@ test('vector sharing tracking survives resize-generated movement but pauses for 
     button.onclick();
     assert.equal(map.raw.fits.length, fits + 1); assert.equal(button.hidden, true);
   }
+  map.raw.pitch = 45;
+  map.raw.emit('pitchstart', { originalEvent: { type: 'touchmove' } });
+  assert.equal(button.hidden, false);
+  button.onclick();
+  assert.equal(map.raw.getPitch(), 0);
+  assert.equal(button.hidden, true);
 });
 
 test('vector fleet tracking keeps its selected vehicle centered through window resizing', async t => {
@@ -87,7 +95,9 @@ test('vector fleet tracking keeps its selected vehicle centered through window r
   assert.equal(map.raw.centers.length, 3);
   map.raw.emit('dragstart', { originalEvent: { type: 'touchmove' } });
   map.invalidateSize(); assert.equal(map.raw.centers.length, 3);
+  map.raw.pitch = 45;
   button.onclick(); assert.equal(tracking.selected(), null);
+  assert.equal(map.raw.getPitch(), 0);
   const fits = map.raw.fits.length;
   map.raw.emit('moveend'); map.invalidateSize();
   assert.equal(map.raw.fits.length, fits + 1); assert.equal(button.hidden, true);

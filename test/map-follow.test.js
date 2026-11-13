@@ -20,7 +20,6 @@ test('fits updated locations, preserves user pan/zoom, and resumes on recenter',
   controller.update(); assert.equal(calls, 2);
   listeners.get('dragstart')(); points = [[40.2, -74], [41, -73]];
   controller.update(); assert.equal(calls, 2);
-  assert.equal(button.textContent, 'Recenter');
   assert.equal(button.hidden, false);
   button.onclick(); assert.equal(calls, 3);
   assert.equal(button.hidden, true);
@@ -45,7 +44,7 @@ test('fleet selection follows one vehicle and show all restores fleet tracking',
   tracking.select('2');
   assert.equal(tracking.selected(), '2');
   assert.deepEqual(calls.at(-1), ['selected', [41, -73], true]);
-  assert.equal(button.textContent, 'Show all vehicles');
+  assert.equal(button.ariaLabel, 'Show all vehicles');
   assert.equal(button.hidden, false);
   locations.set('2', [41.1, -73]); tracking.update();
   assert.deepEqual(calls.at(-1), ['selected', [41.1, -73], false]);

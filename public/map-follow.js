@@ -11,7 +11,6 @@ export function followLocations(map, getPoints, fitPoints, button) {
   let following = true, fitting = false, lastPoints = '';
   function indicate() {
     button.hidden = following;
-    button.textContent = 'Recenter';
     button.title = 'Fit both locations and resume automatic tracking';
   }
   function pause() { if (!fitting) { following = false; indicate(); } }
@@ -23,9 +22,14 @@ export function followLocations(map, getPoints, fitPoints, button) {
     try { fitPoints(points); lastPoints = signature; }
     finally { fitting = false; }
   }
-  map.on('dragstart movestart zoomstart', pause);
+  map.on('dragstart movestart zoomstart pitchstart', pause);
   map.on('resize', () => update(true));
-  button.onclick = () => { following = true; indicate(); update(true); };
+  button.onclick = () => {
+    map.resetPitch?.();
+    following = true;
+    indicate();
+    update(true);
+  };
   indicate();
   return { update };
 }
@@ -35,7 +39,7 @@ export function followFleetLocations(map, getPoints, getSelectedPoint, fitAll, c
   let selectedId = null, following = true, fitting = false, lastTarget = '';
   function indicate() {
     button.hidden = selectedId == null && following;
-    button.textContent = selectedId == null ? 'Recenter' : 'Show all vehicles';
+    button.ariaLabel = selectedId == null ? 'Recenter' : 'Show all vehicles';
     button.title = selectedId == null ? 'Fit all vehicle locations and resume automatic tracking' : 'Fit all vehicle locations';
   }
   function pause() { if (!fitting) { following = false; indicate(); } }
@@ -60,9 +64,10 @@ export function followFleetLocations(map, getPoints, getSelectedPoint, fitAll, c
     selectedId = id; following = true; onSelectionChange(id); indicate(); update(true);
   }
   function showAll() {
+    map.resetPitch?.();
     selectedId = null; following = true; onSelectionChange(null); indicate(); update(true);
   }
-  map.on('dragstart movestart zoomstart', pause);
+  map.on('dragstart movestart zoomstart pitchstart', pause);
   map.on('resize', () => update(true));
   button.onclick = showAll;
   indicate();
